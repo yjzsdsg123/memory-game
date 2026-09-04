@@ -1,26 +1,6 @@
 {
-  "_comment": "真实支付配置模板。复制为 config.json 并填入凭证；mode 改为 live 即启用真实支付。注意：此文件含密钥，切勿提交到公开仓库！",
-  "mode": "live",
+  "mode": "sandbox",
   "port": 8080,
-  "publicBase": "https://你的后端域名",
-
-  "wechat": {
-    "appid": "公众号或小程序 AppID",
-    "mchid": "微信支付商户号",
-    "serialNo": "商户 API 证书序列号",
-    "privateKey": "商户 API 私钥 PEM 内容（apiclient_key.pem 文件全文，含 BEGIN/END 行，换行用 \\n）",
-    "payPublicKey": "微信支付公钥 PEM 内容（微信商户平台下载的「微信支付公钥」，用于回调验签）",
-    "apiV3Key": "APIv3 密钥（32 位，商户平台设置）",
-    "notifyUrl": "https://你的后端域名"
-  },
-
-  "alipay": {
-    "appId": "支付宝开放平台 APPID",
-    "privateKey": "应用私钥 PEM 内容（RSA2，换行用 \\n）",
-    "publicKey": "支付宝公钥 PEM 内容（开放平台查看，用于回调验签）",
-    "notifyUrl": "https://你的后端域名"
-  },
-
   "sms": {
     "provider": "aliyun",
     "accessKeyId": "阿里云 RAM 用户 AccessKey ID（需授权 AliyunDysmsFullAccess）",
