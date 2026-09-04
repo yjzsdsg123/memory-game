@@ -2056,6 +2056,99 @@ body[data-cardback='gold'] .face.back {
   0%, 100% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.22), 0 8px 18px rgba(35, 32, 58, 0.2); }
   50% { box-shadow: 0 0 0 7px rgba(139, 92, 246, 0.32), 0 8px 18px rgba(35, 32, 58, 0.2); }
 }
+
+/* ===== 翻牌学院 ===== */
+.acad-coins {
+  font-size: 14px;
+  color: var(--gold, #f59e0b);
+  font-weight: 700;
+}
+.acad-master {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  background: var(--card, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin: 14px 0 18px;
+}
+.acad-master-emoji {
+  font-size: 40px;
+  flex-shrink: 0;
+  animation: wcBob 3s ease-in-out infinite;
+}
+.acad-master-talk b { display: block; font-size: 15px; margin-bottom: 4px; }
+.acad-master-talk p { margin: 0; font-size: 13px; opacity: 0.85; line-height: 1.5; }
+
+.acad-shop {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.acad-skill {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  background: var(--card, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 12px;
+  padding: 14px 10px;
+}
+.acad-skill-icon { font-size: 32px; }
+.acad-skill-info b { display: block; font-size: 14px; }
+.acad-skill-info small { font-size: 11px; opacity: 0.7; line-height: 1.4; display: block; }
+.acad-skill-stock { font-size: 12px; opacity: 0.8; }
+.acad-skill-stock b { color: var(--accent, #8b5cf6); }
+.acad-skill button[data-buy] { width: 100%; }
+.acad-skill button[data-buy]:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.acad-level-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  justify-content: center;
+  align-items: center;
+  font-size: 14px;
+  background: var(--card, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.acad-level-info b { color: var(--accent, #8b5cf6); font-size: 16px; }
+.acad-rule { width: 100%; text-align: center; font-size: 12px; opacity: 0.75; margin-top: 4px; }
+
+.acad-start-wrap { text-align: center; margin-bottom: 10px; }
+.acad-start-wrap .btn.big { font-size: 17px; padding: 12px 32px; }
+
+.acad-arena[hidden] { display: none !important; }
+.acad-skill-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 8px 0 12px;
+}
+.acad-skill-btn { position: relative; }
+.acad-skill-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#acadLimitWrap[hidden] { display: none !important; }
+#acadLimit { color: var(--accent, #8b5cf6); }
+#acadLimitWrap.danger #acadLimit { color: #ef4444; animation: wbuildPulse 0.8s ease-in-out infinite; }
+
+#acadGrid { max-width: 560px; }
+
+@media (max-width: 560px) {
+  .acad-shop { grid-template-columns: 1fr; }
+  .acad-master { flex-direction: column; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .acad-master-emoji { animation: none; }
+  #acadLimitWrap.danger #acadLimit { animation: none; }
+}
 .wb-emoji {
   font-size: 42px;
   line-height: 1;

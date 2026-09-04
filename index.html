@@ -98,6 +98,86 @@
       <div class="game-msg" id="flipMsg"></div>
     </section>
 
+    <!-- ========== 翻牌学院 ========== -->
+    <section id="view-academy" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="acadBack">← 返回</button>
+        <div class="game-title">🎓 翻牌学院</div>
+        <div class="head-btns">
+          <span class="acad-coins">💰 <b id="acadCoins">0</b></span>
+        </div>
+      </div>
+
+      <!-- 学院大厅 -->
+      <div id="acadLobby">
+        <div class="acad-master">
+          <div class="acad-master-emoji">🧙‍♂️</div>
+          <div class="acad-master-talk">
+            <b>卡牌教授</b>
+            <p>欢迎来到翻牌学院！这里每一关的牌局都不重复——关数越高，牌桌越大、限时越紧。先用金币学几招技能，再去挑战吧。通关奖金币，还能刷最高纪录！</p>
+          </div>
+        </div>
+
+        <div class="acad-shop">
+          <div class="acad-skill" data-skill="glass">
+            <div class="acad-skill-icon">🧐</div>
+            <div class="acad-skill-info">
+              <b>记忆眼镜</b>
+              <small>本关透视一张牌 1.5 秒，不耗步数</small>
+            </div>
+            <div class="acad-skill-stock">持有 <b data-stock>0</b></div>
+            <button class="btn small primary" data-buy="glass">💰80 购买</button>
+          </div>
+          <div class="acad-skill" data-skill="freeze">
+            <div class="acad-skill-icon">⏸️</div>
+            <div class="acad-skill-info">
+              <b>时间冻结</b>
+              <small>本关倒计时暂停 5 秒（限时关）</small>
+            </div>
+            <div class="acad-skill-stock">持有 <b data-stock>0</b></div>
+            <button class="btn small primary" data-buy="freeze">💰100 购买</button>
+          </div>
+          <div class="acad-skill" data-skill="respin">
+            <div class="acad-skill-icon">🔄</div>
+            <div class="acad-skill-info">
+              <b>重洗卡</b>
+              <small>未配对的牌重新洗牌位置</small>
+            </div>
+            <div class="acad-skill-stock">持有 <b data-stock>0</b></div>
+            <button class="btn small primary" data-buy="respin">💰50 购买</button>
+          </div>
+        </div>
+
+        <div class="acad-level-info">
+          <div>当前关卡：<b id="acadCurLevel">1</b></div>
+          <div>最高通关：<b id="acadMaxLevel">0</b></div>
+          <div class="acad-rule" id="acadRuleText"></div>
+        </div>
+
+        <div class="acad-start-wrap">
+          <button class="btn primary big" id="acadStart">🎯 开始第 1 关挑战</button>
+        </div>
+      </div>
+
+      <!-- 挑战进行区 -->
+      <div class="acad-arena" id="acadArena" hidden>
+        <div class="hud">
+          <span>步数：<b id="acadMoves">0</b></span>
+          <span>用时：<b id="acadTime">00:00</b></span>
+          <span id="acadLimitWrap" hidden>剩余：<b id="acadLimit">00</b>s</span>
+          <span>已配对：<b id="acadMatched">0/0</b></span>
+        </div>
+        <div class="acad-skill-bar">
+          <button class="btn small ghost acad-skill-btn" id="acadUseGlass" disabled>🧐 眼镜（0）</button>
+          <button class="btn small ghost acad-skill-btn" id="acadUseFreeze" disabled>⏸️ 冻结（0）</button>
+          <button class="btn small ghost acad-skill-btn" id="acadUseRespin" disabled>🔄 重洗（0）</button>
+          <button class="btn small ghost" id="acadQuit">放弃</button>
+        </div>
+        <div class="flip-grid" id="acadGrid"></div>
+        <div class="game-msg" id="acadMsg"></div>
+      </div>
+    </section>
+
     <!-- ========== 数字记忆 ========== -->
     <section id="view-digit" hidden>
       <div class="game-head">

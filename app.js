@@ -317,6 +317,353 @@ flipHintBtn.addEventListener('click', useFlipHint);
 $('flipRestart').addEventListener('click', newFlip);
 $('flipBack').addEventListener('click', () => showView('home'));
 
+/* ================= 翻牌学院（关卡制 + 技能） ================= */
+const ACADEM_EMOJIS = [
+  '🍎', '🚀', '🐱', '🌈', '⚽', '🎵', '🌻', '🐳', '🍩', '🎈',
+  '🦊', '🍉', '🎸', '🐧', '🌙', '🍦', '🚲', '🌈', '🍔', '🦄',
+  '🎮', '🍀', '🐶', '🎯',
+];
+
+const ACADEM_SKILLS = {
+  glass: { emoji: '🧐', name: '记忆眼镜', price: 80 },
+  freeze: { emoji: '⏸️', name: '时间冻结', price: 100 },
+  respin: { emoji: '🔄', name: '重洗卡', price: 50 },
+};
+
+/* 关卡规格：返回 {cols, rows, pairs, limitSec|null} */
+function acadLevelSpec(n) {
+  const table = [
+    { cols: 4, rows: 4, pairs: 8, limitSec: null },   /* L1 */
+    { cols: 5, rows: 4, pairs: 10, limitSec: null },  /* L2 */
+    { cols: 6, rows: 4, pairs: 12, limitSec: null },  /* L3 */
+    { cols: 6, rows: 6, pairs: 18, limitSec: 90 },     /* L4 */
+    { cols: 6, rows: 6, pairs: 18, limitSec: 75 },    /* L5 */
+  ];
+  if (n <= table.length) return table[n - 1];
+  const limit = Math.max(30, 90 - (n - 4) * 10);
+  return { cols: 6, rows: 6, pairs: 18, limitSec: limit };
+}
+
+const acadGrid = $('acadGrid');
+let acad = null;
+
+function getAcadMax() { return Math.max(0, Number(localStorage.getItem('mem_acad_max')) || 0); }
+function setAcadMax(n) { localStorage.setItem('mem_acad_max', String(n)); }
+function getAcadCur() { return Math.max(1, Number(localStorage.getItem('mem_acad_cur')) || 1); }
+function setAcadCur(n) { localStorage.setItem('mem_acad_cur', String(n)); }
+
+function getAcadItems() {
+  try {
+    const o = JSON.parse(localStorage.getItem('mem_acad_items'));
+    return { glass: Number(o.glass) || 0, freeze: Number(o.freeze) || 0, respin: Number(o.respin) || 0 };
+  } catch { return { glass: 0, freeze: 0, respin: 0 }; }
+}
+function addAcadItem(key, n) {
+  const items = getAcadItems();
+  items[key] = Math.max(0, items[key] + n);
+  localStorage.setItem('mem_acad_items', JSON.stringify(items));
+  return items[key];
+}
+function buyAcadItem(key) {
+  const price = ACADEM_SKILLS[key].price;
+  if (getCoins() < price) { sndMiss(); return; }
+  addCoins(-price);
+  addAcadItem(key, 1);
+  sndWin();
+  openAcademy();
+}
+
+/* ---- 大厅 ---- */
+function openAcademy() {
+  stopAcad();
+  $('acadLobby').hidden = false;
+  $('acadArena').hidden = true;
+  $('acadCoins').textContent = getCoins();
+  const items = getAcadItems();
+  document.querySelectorAll('.acad-skill').forEach((el) => {
+    const k = el.dataset.skill;
+    el.querySelector('[data-stock]').textContent = items[k];
+    const btn = el.querySelector('[data-buy]');
+    btn.disabled = getCoins() < ACADEM_SKILLS[k].price;
+  });
+  const cur = getAcadCur();
+  const max = getAcadMax();
+  $('acadCurLevel').textContent = cur;
+  $('acadMaxLevel').textContent = max;
+  const spec = acadLevelSpec(cur);
+  const limitTxt = spec.limitSec ? `、限时 ${spec.limitSec} 秒` : '';
+  $('acadRuleText').textContent = `第 ${cur} 关：${spec.cols}×${spec.rows} 牌桌、${spec.pairs} 对配对${limitTxt}。通关 +${cur * 15} 金币。`;
+  $('acadStart').textContent = `🎯 开始第 ${cur} 关挑战`;
+}
+
+function renderAcadShop() { /* 大厅刷新在 openAcademy 内统一处理 */ }
+
+/* ---- 关卡 ---- */
+function acadStart() {
+  const n = getAcadCur();
+  const spec = acadLevelSpec(n);
+  const pool = shuffle(ACADEM_EMOJIS).slice(0, spec.pairs);
+  const deck = shuffle([...pool, ...pool]).map((e) => ({ e, done: false, open: false }));
+  acad = {
+    level: n, spec, deck, open: [], matched: 0, moves: 0,
+    startTs: null, timerId: null, limitId: null, lock: false,
+    glassMode: false, freezeUntil: 0, dead: false,
+  };
+  $('acadLobby').hidden = true;
+  $('acadArena').hidden = false;
+  $('acadMoves').textContent = '0';
+  $('acadTime').textContent = '00:00';
+  $('acadMatched').textContent = `0/${spec.pairs}`;
+  $('acadMsg').textContent = '';
+  $('acadMsg').className = 'game-msg';
+  acadGrid.style.gridTemplateColumns = `repeat(${spec.cols}, 1fr)`;
+  renderAcadGrid();
+  acadDealAnimation();
+  updateAcadSkillBtns();
+  /* 限时条 */
+  if (spec.limitSec) {
+    $('acadLimitWrap').hidden = false;
+    $('acadLimit').textContent = String(spec.limitSec);
+    $('acadLimitWrap').classList.remove('danger');
+  } else {
+    $('acadLimitWrap').hidden = true;
+  }
+}
+
+function renderAcadGrid() {
+  acadGrid.innerHTML = '';
+  acad.deck.forEach((card, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'fcard';
+    btn.innerHTML = `<div class="fcard-inner"><div class="face back"></div><div class="face front">${card.e}</div></div>`;
+    btn.addEventListener('click', () => onAcadCard(i));
+    acadGrid.appendChild(btn);
+  });
+}
+
+function updateAcadCard(i) {
+  const card = acad.deck[i];
+  const el = acadGrid.children[i];
+  el.classList.toggle('open', card.open);
+  el.classList.toggle('done', card.done);
+}
+
+function acadDealAnimation() {
+  const cards = [...acadGrid.children];
+  acad.lock = true;
+  cards.forEach((el, i) => {
+    el.classList.add('deal');
+    el.style.animationDelay = `${i * 40}ms`;
+    sndDeal(i);
+  });
+  setTimeout(() => {
+    cards.forEach((el) => { el.classList.remove('deal'); el.style.animationDelay = ''; });
+    acad.lock = false;
+  }, cards.length * 40 + 450);
+}
+
+function onAcadCard(i) {
+  if (!acad || acad.dead) return;
+  const card = acad.deck[i];
+  /* 记忆眼镜选牌模式：透视一张 1.5s，不耗步数不触发配对 */
+  if (acad.glassMode) {
+    if (acad.lock || card.open || card.done) return;
+    acad.glassMode = false;
+    acadGrid.children[i].classList.add('open', 'hint');
+    sndHint();
+    setTimeout(() => {
+      if (acad && !acad.deck[i].open) acadGrid.children[i].classList.remove('open', 'hint');
+    }, 1500);
+    return;
+  }
+  if (acad.lock || card.open || card.done) return;
+  if (!acad.startTs) {
+    acad.startTs = Date.now();
+    acad.timerId = setInterval(acadTick, 500);
+    if (acad.spec.limitSec) startAcadLimit();
+  }
+  card.open = true;
+  acad.open.push(i);
+  updateAcadCard(i);
+  sndFlip();
+
+  if (acad.open.length === 2) {
+    acad.moves++;
+    $('acadMoves').textContent = acad.moves;
+    const [a, b] = acad.open;
+    if (acad.deck[a].e === acad.deck[b].e) {
+      acad.deck[a].done = acad.deck[b].done = true;
+      acad.open = [];
+      acad.matched++;
+      $('acadMatched').textContent = `${acad.matched}/${acad.spec.pairs}`;
+      updateAcadCard(a);
+      updateAcadCard(b);
+      sndMatch();
+      if (acad.matched === acad.spec.pairs) winAcad();
+    } else {
+      acad.lock = true;
+      acadGrid.children[a].classList.add('shake');
+      acadGrid.children[b].classList.add('shake');
+      sndMiss();
+      setTimeout(() => {
+        if (!acad || acad.dead) return;
+        acad.deck[a].open = acad.deck[b].open = false;
+        acad.open = [];
+        acadGrid.children[a].classList.remove('shake');
+        acadGrid.children[b].classList.remove('shake');
+        updateAcadCard(a);
+        updateAcadCard(b);
+        acad.lock = false;
+      }, 750);
+    }
+  }
+}
+
+function acadTick() {
+  if (!acad || acad.dead) return;
+  const sec = Math.floor((Date.now() - acad.startTs) / 1000);
+  $('acadTime').textContent = fmtTime(sec);
+}
+
+function startAcadLimit() {
+  const total = acad.spec.limitSec;
+  const tick = () => {
+    if (!acad || acad.dead) return;
+    let elapsed = Math.floor((Date.now() - acad.startTs) / 1000);
+    /* 冻结期内暂停扣减 */
+    if (acad.freezeUntil > Date.now()) {
+      /* 暂停期间延长 startTs 使倒计时不动 */
+      acad.startTs += 500;
+      elapsed = Math.floor((Date.now() - acad.startTs) / 1000);
+    }
+    const left = total - elapsed;
+    $('acadLimit').textContent = String(Math.max(0, left));
+    $('acadLimitWrap').classList.toggle('danger', left <= 10);
+    if (left <= 0) { failAcad(); return; }
+    acad.limitId = setTimeout(tick, 500);
+  };
+  tick();
+}
+
+function winAcad() {
+  acad.dead = true;
+  stopAcadTimers();
+  const n = acad.level;
+  const reward = n * 15;
+  addCoins(reward);
+  if (n > getAcadMax()) setAcadMax(n);
+  const next = n + 1;
+  setAcadCur(next);
+  $('acadMsg').textContent = `🎉 通关第 ${n} 关！+${reward} 金币，已解锁第 ${next} 关。`;
+  $('acadMsg').className = 'game-msg ok';
+  sndWin();
+  [...acadGrid.children].forEach((el, i) => setTimeout(() => el.classList.add('wave'), i * 45));
+  $('acadStart').textContent = '🎯 继续第 ' + next + ' 关';
+  $('acadStart').onclick = null;
+  $('acadLobby').hidden = false;
+  $('acadArena').hidden = true;
+  $('acadCoins').textContent = getCoins();
+  $('acadCurLevel').textContent = next;
+  $('acadMaxLevel').textContent = getAcadMax();
+  const spec = acadLevelSpec(next);
+  const limitTxt = spec.limitSec ? `、限时 ${spec.limitSec} 秒` : '';
+  $('acadRuleText').textContent = `第 ${next} 关：${spec.cols}×${spec.rows} 牌桌、${spec.pairs} 对配对${limitTxt}。通关 +${next * 15} 金币。`;
+  updateAcadSkillBtns();
+}
+
+function failAcad() {
+  acad.dead = true;
+  stopAcadTimers();
+  $('acadMsg').textContent = '⏱️ 时间到，本关挑战失败！';
+  $('acadMsg').className = 'game-msg';
+  sndMiss();
+  $('acadStart').textContent = '🎯 重新挑战第 ' + acad.level + ' 关';
+  $('acadStart').onclick = null;
+  $('acadLobby').hidden = false;
+  $('acadArena').hidden = true;
+}
+
+function stopAcadTimers() {
+  if (acad && acad.timerId) { clearInterval(acad.timerId); acad.timerId = null; }
+  if (acad && acad.limitId) { clearTimeout(acad.limitId); acad.limitId = null; }
+}
+
+function stopAcad() {
+  stopAcadTimers();
+  acad = null;
+}
+
+/* ---- 学院技能（关卡内） ---- */
+function updateAcadSkillBtns() {
+  const items = getAcadItems();
+  const playing = !!(acad && !acad.dead);
+  const setBtn = (id, k) => {
+    const el = $(id);
+    el.textContent = `${ACADEM_SKILLS[k].emoji} ${ACADEM_SKILLS[k].name.slice(0,2)}（${items[k]}）`;
+    el.disabled = !playing || items[k] <= 0;
+  };
+  setBtn('acadUseGlass', 'glass');
+  setBtn('acadUseFreeze', 'freeze');
+  setBtn('acadUseRespin', 'respin');
+}
+
+function useAcadGlass() {
+  if (!acad || acad.dead || acad.lock) return;
+  if (getAcadItems().glass <= 0) return;
+  addAcadItem('glass', -1);
+  acad.glassMode = true;
+  $('acadMsg').textContent = '🧐 点击任意一张牌透视 1.5 秒';
+  $('acadMsg').className = 'game-msg';
+  updateAcadSkillBtns();
+  sndHint();
+}
+
+function useAcadFreeze() {
+  if (!acad || acad.dead || !acad.spec.limitSec) return;
+  if (getAcadItems().freeze <= 0) return;
+  addAcadItem('freeze', -1);
+  acad.freezeUntil = Date.now() + 5000;
+  $('acadMsg').textContent = '⏸️ 倒计时暂停 5 秒！';
+  $('acadMsg').className = 'game-msg ok';
+  updateAcadSkillBtns();
+  sndHint();
+}
+
+function useAcadRespin() {
+  if (!acad || acad.dead || acad.lock) return;
+  if (getAcadItems().respin <= 0) return;
+  addAcadItem('respin', -1);
+  /* 收集未配对且未翻开的牌位置与 emoji，重新洗牌位置 */
+  const idxs = [];
+  const emojis = [];
+  acad.deck.forEach((c, i) => {
+    if (!c.done && !c.open) { idxs.push(i); emojis.push(c.e); }
+  });
+  const shuffled = shuffle(emojis);
+  idxs.forEach((pos, k) => { acad.deck[pos].e = shuffled[k]; });
+  /* 重建 DOM 以更新正面 emoji */
+  acad.deck.forEach((c, i) => {
+    const el = acadGrid.children[i];
+    const front = el.querySelector('.face.front');
+    if (front) front.textContent = c.e;
+  });
+  $('acadMsg').textContent = '🔄 未配对的牌已重新洗牌！';
+  $('acadMsg').className = 'game-msg ok';
+  updateAcadSkillBtns();
+  sndHint();
+}
+
+/* ---- 事件 ---- */
+$('acadBack').addEventListener('click', backFromWorld);
+$('acadStart').addEventListener('click', acadStart);
+$('acadQuit').addEventListener('click', () => { stopAcad(); openAcademy(); });
+$('acadUseGlass').addEventListener('click', useAcadGlass);
+$('acadUseFreeze').addEventListener('click', useAcadFreeze);
+$('acadUseRespin').addEventListener('click', useAcadRespin);
+document.querySelectorAll('.acad-skill [data-buy]').forEach((btn) => {
+  btn.addEventListener('click', () => buyAcadItem(btn.dataset.buy));
+});
+
 /* ================= 数字记忆 ================= */
 let digit = { level: 4, phase: 'idle', num: '', timers: [], hints: 3, hintUsed: 0 };
 
@@ -2126,7 +2473,8 @@ function fitWorld() {
 function enterWorldView(v) {
   hideBubble();
   worldReturn = true;
-  if (v === 'flip') { showView('flip'); newFlip(); }
+  if (v === 'academy') { showView('academy'); openAcademy(); }
+  else if (v === 'flip') { showView('flip'); newFlip(); }
   else if (v === 'digit') { showView('digit'); newDigit(); }
   else if (v === 'simon') { showView('simon'); newSimon(); }
   else if (v === 'rank') { showView('rank'); newRank(); }
