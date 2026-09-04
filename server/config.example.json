@@ -19,5 +19,13 @@
     "privateKey": "应用私钥 PEM 内容（RSA2，换行用 \\n）",
     "publicKey": "支付宝公钥 PEM 内容（开放平台查看，用于回调验签）",
     "notifyUrl": "https://你的后端域名"
+  },
+
+  "sms": {
+    "provider": "aliyun",
+    "accessKeyId": "阿里云 RAM 用户 AccessKey ID（需授权 AliyunDysmsFullAccess）",
+    "accessKeySecret": "阿里云 RAM 用户 AccessKey Secret",
+    "signName": "短信签名名称（如：记忆力挑战，需在阿里云短信控制台审核通过）",
+    "templateCode": "短信模板 CODE（如：SMS_123456789，模板内容需含 ${code} 变量，审核通过）"
   }
 }

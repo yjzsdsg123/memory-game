@@ -1625,21 +1625,10 @@ function validPhone(p) {
   return /^1[3-9]\d{9}$/.test(p);
 }
 
-function sendCode() {
-  const phone = $('loginPhone').value.trim();
-  if (!validPhone(phone)) {
-    setLoginMsg('请输入正确的 11 位手机号');
-    sndMiss();
-    return;
-  }
-  setLoginMsg('');
-  /* 演示：本地生成 6 位验证码直接显示；真实环境此处调用短信接口 */
-  sentCode = String(Math.floor(100000 + Math.random() * 900000));
-  const demo = $('loginDemoCode');
-  demo.hidden = false;
-  demo.textContent = `演示验证码：${sentCode}（真实环境将短信发送至 ${maskPhone(phone)}）`;
-  sndMatch();
-  /* 60 秒倒计时 */
+/* 发码通道：'backend' 走后端短信服务；'demo' 后端不可达时本地降级 */
+let smsMode = null;
+
+function startCountdown() {
   let left = 60;
   const btn = $('loginSend');
   resetSendBtn(); /* 清掉可能存在的旧倒计时 */
@@ -1655,16 +1644,70 @@ function sendCode() {
   }, 1000);
 }
 
-function doLogin() {
+async function sendCode() {
+  const phone = $('loginPhone').value.trim();
+  if (!validPhone(phone)) {
+    setLoginMsg('请输入正确的 11 位手机号');
+    sndMiss();
+    return;
+  }
+  setLoginMsg('');
+
+  let data = null;
+  let netFailed = false;
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 6000);
+    const r = await fetch(PAY_API_BASE + '/api/sms/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+      signal: ctrl.signal,
+    });
+    data = await r.json();
+  } catch {
+    netFailed = true; /* 后端未启动/超时 */
+  }
+
+  if (netFailed || !data) {
+    /* 降级：本地演示验证码（离线可玩） */
+    sentCode = String(Math.floor(100000 + Math.random() * 900000));
+    smsMode = 'demo';
+    const demo = $('loginDemoCode');
+    demo.hidden = false;
+    demo.textContent = `演示验证码：${sentCode}（后端未连接，本地演示模式）`;
+    sndMatch();
+    startCountdown();
+    return;
+  }
+
+  if (!data.ok) {
+    /* 后端业务拒绝（频率限制/号码非法），直接展示原因 */
+    setLoginMsg(data.error || '发送失败，请稍后再试');
+    sndMiss();
+    return;
+  }
+
+  smsMode = 'backend';
+  sentCode = '';
+  const demo = $('loginDemoCode');
+  if (data.devCode) {
+    /* 沙盒模式：后端返回开发验证码 */
+    demo.hidden = false;
+    demo.textContent = `演示验证码：${data.devCode}（沙盒环境，不真实发短信）`;
+  } else {
+    demo.hidden = true;
+    setLoginMsg(`✅ 验证码已发送至 ${maskPhone(phone)}，5 分钟内有效`);
+  }
+  sndMatch();
+  startCountdown();
+}
+
+async function doLogin() {
   const phone = $('loginPhone').value.trim();
   const code = $('loginCode').value.trim();
   if (!validPhone(phone)) {
     setLoginMsg('请输入正确的手机号');
-    sndMiss();
-    return;
-  }
-  if (!sentCode) {
-    setLoginMsg('请先获取验证码');
     sndMiss();
     return;
   }
@@ -1673,13 +1716,52 @@ function doLogin() {
     sndMiss();
     return;
   }
-  if (code !== sentCode) {
-    setLoginMsg('验证码错误，请重新输入');
-    sndMiss();
-    return;
+
+  if (smsMode === 'backend') {
+    let data = null;
+    let netFailed = false;
+    try {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 6000);
+      const r = await fetch(PAY_API_BASE + '/api/sms/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
+        signal: ctrl.signal,
+      });
+      data = await r.json();
+    } catch {
+      netFailed = true;
+    }
+    if (netFailed || !data) {
+      setLoginMsg('后端连接中断，请稍后重试');
+      sndMiss();
+      return;
+    }
+    if (!data.ok) {
+      setLoginMsg(data.error || '验证失败');
+      sndMiss();
+      return;
+    }
+    localStorage.setItem('mem_user', phone);
+    localStorage.setItem('mem_token', data.token || '');
+  } else {
+    /* 演示降级：本地校验 */
+    if (!sentCode) {
+      setLoginMsg('请先获取验证码');
+      sndMiss();
+      return;
+    }
+    if (code !== sentCode) {
+      setLoginMsg('验证码错误，请重新输入');
+      sndMiss();
+      return;
+    }
+    localStorage.setItem('mem_user', phone);
+    localStorage.removeItem('mem_token');
   }
-  localStorage.setItem('mem_user', phone);
   sentCode = '';
+  smsMode = null;
   resetSendBtn();
   renderUser();
   sndWin();
@@ -1688,6 +1770,7 @@ function doLogin() {
 
 function logout() {
   localStorage.removeItem('mem_user');
+  localStorage.removeItem('mem_token');
   renderUser();
   sndFlip();
   closeLogin();
