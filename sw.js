@@ -1,5 +1,5 @@
 /* 记忆力挑战 Service Worker：缓存优先，支持离线游玩 */
-const CACHE = 'mem-game-v17';
+const CACHE = 'mem-game-v19';
 const ASSETS = [
   './',
   './index.html',

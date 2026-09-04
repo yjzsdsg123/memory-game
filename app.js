@@ -1103,10 +1103,12 @@ $('openRank').addEventListener('click', () => {
 $('openShop').addEventListener('click', () => {
   showView('shop');
   renderShop();
+  renderRecharge();
 });
 $('coinsBtn').addEventListener('click', () => {
   showView('shop');
   renderShop();
+  renderRecharge();
 });
 $('shopBack').addEventListener('click', () => showView('home'));
 $('buyHints').addEventListener('click', () => {
@@ -1122,6 +1124,89 @@ $('buyHints').addEventListener('click', () => {
   renderHintBtns();
 });
 $('navLogo').addEventListener('click', () => showView('home'));
+
+/* ================= 现金充值（演示支付流程） ================= */
+/* 注意：纯前端静态站无法安全处理真实扣款。真实收款需后端 + 微信/支付宝商户号，
+   届时把 fakePay() 替换为拉起真实支付 SDK 并在回调里 addCoins 即可。 */
+const RECHARGE_PACKAGES = [
+  { id: 'p1', coins: 100, price: 6, bonus: 0 },
+  { id: 'p2', coins: 200, price: 12, bonus: 20, hot: true },
+  { id: 'p3', coins: 500, price: 30, bonus: 100 },
+  { id: 'p4', coins: 1200, price: 68, bonus: 300 },
+];
+
+let pendingRecharge = null;
+
+function renderRecharge() {
+  const grid = $('rechargeGrid');
+  grid.innerHTML = '';
+  RECHARGE_PACKAGES.forEach((p) => {
+    const btn = document.createElement('button');
+    btn.className = 'recharge-item' + (p.hot ? ' hot' : '');
+    const total = p.coins + p.bonus;
+    btn.innerHTML = `
+      <span class="r-coins">🪙 ${total}</span>
+      <span class="r-bonus">${p.bonus ? `赠 ${p.bonus}` : ''}</span>
+      <span class="r-price">¥${p.price}</span>`;
+    btn.addEventListener('click', () => openPay(p));
+    grid.appendChild(btn);
+  });
+}
+
+function showPayStep(step) {
+  ['payStepMethod', 'payStepQr', 'payStepDone'].forEach((id) => {
+    $(id).hidden = id !== 'payStep' + step;
+  });
+}
+
+function openPay(pkg) {
+  pendingRecharge = pkg;
+  const total = pkg.coins + pkg.bonus;
+  $('payCoins').textContent = total;
+  $('payPrice').textContent = '¥' + pkg.price;
+  showPayStep('Method');
+  $('payOverlay').hidden = false;
+  sndFlip();
+}
+
+function closePay() {
+  $('payOverlay').hidden = true;
+  pendingRecharge = null;
+}
+
+/* 选择支付方式 -> 显示扫码步骤 */
+function choosePay(method) {
+  const isWechat = method === 'wechat';
+  $('payMethodName').textContent = isWechat ? '微信' : '支付宝';
+  $('payQrLogo').textContent = isWechat ? '💚' : '💙';
+  $('payQrTitle').textContent = isWechat ? '微信扫码支付' : '支付宝扫码支付';
+  showPayStep('Qr');
+  sndMatch();
+}
+
+/* 模拟支付成功（真实环境此函数由支付回调触发） */
+function fakePay() {
+  if (!pendingRecharge) return;
+  const total = pendingRecharge.coins + pendingRecharge.bonus;
+  addCoins(total);
+  $('payDoneCoins').textContent = total;
+  showPayStep('Done');
+  renderCoins(true);
+  renderShop();
+  sndWin();
+}
+
+$('openRecharge').addEventListener('click', () => {
+  $('rechargeGrid').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+$('payWechat').addEventListener('click', () => choosePay('wechat'));
+$('payAlipay').addEventListener('click', () => choosePay('alipay'));
+$('payFakeLink').addEventListener('click', fakePay);
+$('payDoneBtn').addEventListener('click', closePay);
+$('payClose').addEventListener('click', closePay);
+$('payOverlay').addEventListener('click', (e) => {
+  if (e.target === $('payOverlay')) closePay();
+});
 
 /* 初始化：保底 3 个提示 + 应用已装备的卡背 + 金币显示 */
 ensureHints();

@@ -174,9 +174,12 @@
       <div class="game-head">
         <button class="back-btn" id="shopBack">← 返回</button>
         <div class="game-title">🎁 装饰商店</div>
-        <div class="coins-pill static">🪙 <b id="shopCoins">0</b></div>
+        <button class="btn small primary" id="openRecharge">💰 充值</button>
       </div>
-      <p class="shop-tip">参加排位赛即可赚取金币（胜 +50 / 平 +20 / 负 +10），购买的卡背在翻牌配对和排位赛中全局生效</p>
+      <p class="shop-tip">金币可通过排位赛免费赚取（胜 +50 / 平 +20 / 负 +10），也可现金充值；购买的卡背在翻牌配对和排位赛中全局生效</p>
+      <div class="shop-section-title">💴 现金充值金币 <span class="recharge-balance">当前余额 🪙 <b id="shopCoins">0</b></span></div>
+      <div class="recharge-grid" id="rechargeGrid"></div>
+      <p class="recharge-note">* 本页支付为演示流程，不会真实扣款；接入真实微信/支付宝支付需商户号与后端校验</p>
       <div class="shop-section-title">🧩 道具</div>
       <div class="shop-consumable-wrap">
         <div class="shop-item shop-consumable">
@@ -207,6 +210,40 @@
       <div class="rank-result-actions">
         <button class="btn ghost" id="rrHome">返回首页</button>
         <button class="btn primary" id="rrAgain">再来一局</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 现金充值支付弹窗（演示流程） ========== -->
+  <div class="pay-overlay" id="payOverlay" hidden>
+    <div class="pay-card">
+      <button class="pay-close" id="payClose">×</button>
+      <!-- 步骤1：选择支付方式 -->
+      <div class="pay-step" id="payStepMethod">
+        <div class="pay-title">选择支付方式</div>
+        <div class="pay-amount">充值 <b id="payCoins">100</b> 金币 · <span id="payPrice">¥6</span></div>
+        <button class="pay-method wechat" id="payWechat">
+          <span class="pay-micon">💚</span><span>微信支付</span>
+        </button>
+        <button class="pay-method alipay" id="payAlipay">
+          <span class="pay-micon">💙</span><span>支付宝</span>
+        </button>
+      </div>
+      <!-- 步骤2：扫码/支付中 -->
+      <div class="pay-step" id="payStepQr" hidden>
+        <div class="pay-title" id="payQrTitle">扫码支付</div>
+        <div class="pay-qr" id="payQrBox">
+          <div class="pay-qr-pattern"></div>
+          <div class="pay-qr-logo" id="payQrLogo">💚</div>
+        </div>
+        <div class="pay-qr-hint">请使用 <b id="payMethodName">微信</b> 扫一扫<br/>（演示环境，<span class="pay-fake-link" id="payFakeLink">点此模拟支付成功</span>）</div>
+      </div>
+      <!-- 步骤3：支付成功 -->
+      <div class="pay-step" id="payStepDone" hidden>
+        <div class="pay-done-icon">✅</div>
+        <div class="pay-title">支付成功</div>
+        <div class="pay-done-coins">🪙 +<b id="payDoneCoins">100</b> 金币已到账</div>
+        <button class="btn primary" id="payDoneBtn">好的</button>
       </div>
     </div>
   </div>
