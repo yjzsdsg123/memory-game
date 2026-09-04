@@ -10,6 +10,8 @@
   --right: #16a34a;
   --wrong: #dc2626;
   --shadow: 0 8px 24px rgba(35, 32, 58, 0.08);
+  --sky-top: #6db9f2;
+  --sky-horizon: #cdeeff;
 }
 
 [data-theme='dark'] {
@@ -19,6 +21,8 @@
   --text-light: #9d98b8;
   --border: #322d4d;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --sky-top: #141a33;
+  --sky-horizon: #2c3560;
 }
 
 * {
@@ -1975,10 +1979,12 @@ body[data-cardback='gold'] .face.back {
   overflow: hidden;
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
-  background: #a5d99a;
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-top) 30%, var(--sky-horizon) 58%, var(--sky-horizon) 100%);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  perspective: 1200px;
+  perspective-origin: 50% 22%;
 }
 .world-stage {
   position: absolute;
@@ -1987,13 +1993,15 @@ body[data-cardback='gold'] .face.back {
   width: 1000px;
   height: 680px;
   transform-origin: center center;
+  transform-style: preserve-3d;
 }
 .world-ground {
   position: absolute;
   inset: 0;
   background:
     radial-gradient(circle at 50% 76%, rgba(255, 255, 255, 0.28) 0 70px, transparent 72px),
-    linear-gradient(160deg, #bfe8b0 0%, #a5d99a 48%, #8fcc86 100%);
+    linear-gradient(180deg, #d3edc4 0%, #a5d99a 42%, #7fc377 100%);
+  transform-style: preserve-3d;
 }
 .world-path {
   position: absolute;
@@ -2018,19 +2026,23 @@ body[data-cardback='gold'] .face.back {
   z-index: 1;
   pointer-events: none;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.15));
+  transform-origin: 50% 92%;
+  transform: rotateX(calc(-1 * var(--tilt, 52deg)));
 }
 .world-layer {
   position: absolute;
   inset: 0;
   z-index: 2;
+  transform-style: preserve-3d;
 }
 
-/* 建筑 */
+/* 建筑（3D 立牌：垂直于地面朝向相机） */
 .world-building {
   position: absolute;
   border-radius: 16px;
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel) 0%, color-mix(in srgb, var(--panel) 82%, #8b5cf6) 100%);
   border: 2px solid var(--border);
+  border-bottom: 4px solid color-mix(in srgb, var(--primary) 55%, var(--border));
   box-shadow: 0 6px 14px rgba(35, 32, 58, 0.18);
   display: flex;
   flex-direction: column;
@@ -2039,13 +2051,15 @@ body[data-cardback='gold'] .face.back {
   gap: 4px;
   transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
   z-index: 2;
+  transform-origin: 50% 100%;
+  transform: rotateX(calc(-1 * var(--tilt, 52deg)));
 }
 .world-building:hover {
-  transform: translateY(-3px);
+  transform: rotateX(calc(-1 * var(--tilt, 52deg))) translateZ(12px);
   box-shadow: 0 10px 20px rgba(35, 32, 58, 0.22);
 }
 .world-building:active {
-  transform: scale(0.95);
+  transform: rotateX(calc(-1 * var(--tilt, 52deg))) translateZ(2px) scale(0.97);
 }
 .world-building.near {
   border-color: var(--primary);
@@ -2224,7 +2238,7 @@ body[data-cardback='gold'] .face.back {
   50% { transform: translateY(-4px); }
 }
 
-/* 对话气泡 */
+/* 对话气泡（3D 立牌，rotateX/translateZ 由 showBubble 注入） */
 .world-bubble {
   position: absolute;
   z-index: 30;
@@ -2237,6 +2251,7 @@ body[data-cardback='gold'] .face.back {
   box-shadow: var(--shadow);
   font-size: 13px;
   color: var(--text);
+  transform-origin: 50% 100%;
 }
 .world-bubble b {
   display: block;

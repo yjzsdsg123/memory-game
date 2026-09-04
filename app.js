@@ -2292,6 +2292,8 @@ function showFriendsView(tab) {
 
 /* ================= 大世界 · 记忆小镇 ================= */
 const WORLD_W = 1000;
+/* 3D 视角：地面绕 X 轴倾倒角度（度），立牌用反角立起 */
+const WORLD_TILT = 52;
 const WORLD_H = 680;
 const WORLD_AVATARS = ['🧑‍🎨', '🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '🥷', '🤖', '🐱', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯', '🐧'];
 
@@ -2402,7 +2404,7 @@ function makeCharEl(cls, emoji, name) {
 }
 
 function placeChar(el, x, y) {
-  el.style.transform = `translate(${x}px, ${y}px)`;
+  el.style.transform = `translate(${x}px, ${y}px) rotateX(-${WORLD_TILT}deg)`;
   el.style.zIndex = String(Math.round(y) + 5);
 }
 
@@ -2465,8 +2467,12 @@ function buildWorld() {
 
 function fitWorld() {
   const rect = $('worldWrap').getBoundingClientRect();
-  const scale = Math.min(rect.width / WORLD_W, rect.height / WORLD_H);
-  $('worldStage').style.transform = `translate(-50%, -50%) scale(${scale})`;
+  /* 视觉高度 = 地面压扁(680×cos52°≈419) + 立牌余量；压扁后地面纵深感保留全图可见 */
+  const visH = Math.round(WORLD_H * Math.cos(WORLD_TILT * Math.PI / 180)) + 140;
+  const stage = $('worldStage');
+  stage.style.setProperty('--tilt', WORLD_TILT + 'deg');
+  const scale = Math.min(rect.width / WORLD_W, rect.height / visH);
+  stage.style.transform = `translate(-50%, -50%) scale(${scale}) rotateX(${WORLD_TILT}deg)`;
 }
 
 /* ---- 从世界进入功能视图 ---- */
@@ -2497,6 +2503,7 @@ function showBubble(x, y, innerHtml) {
   bub.innerHTML = innerHtml + '<button class="wbub-close" title="关闭" type="button">×</button>';
   bub.style.left = wcClamp(x, 130, WORLD_W - 130) + 'px';
   bub.style.top = (y - 10) + 'px';
+  bub.style.transform = `rotateX(-${WORLD_TILT}deg) translateZ(80px)`;
   bub.hidden = false;
   bub.querySelector('.wbub-close').onclick = hideBubble;
   const c2 = bub.querySelector('#wbubClose2');
