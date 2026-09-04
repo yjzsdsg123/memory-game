@@ -191,6 +191,15 @@
             <button class="shop-buy" id="buyHints">🪙 20 购买</button>
           </div>
         </div>
+        <div class="shop-item shop-consumable">
+          <div class="shop-preview ad-preview">📺</div>
+          <b>看广告 +1 提示</b>
+          <span class="shop-desc">观看 5 秒广告即可免费领取提示，每天限 3 次</span>
+          <div class="shop-consumable-row">
+            <span class="hint-stock">今日剩余 <b id="shopAdLeft">3</b></span>
+            <button class="shop-buy ad-buy" id="watchAd">📺 观看广告</button>
+          </div>
+        </div>
       </div>
       <div class="shop-section-title">🎴 卡背皮肤</div>
       <div class="shop-grid" id="shopGrid"></div>
@@ -244,6 +253,30 @@
         <div class="pay-title">支付成功</div>
         <div class="pay-done-coins">🪙 +<b id="payDoneCoins">100</b> 金币已到账</div>
         <button class="btn primary" id="payDoneBtn">好的</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 激励广告弹窗（模拟） ========== -->
+  <div class="ad-overlay" id="adOverlay" hidden>
+    <div class="ad-card">
+      <div class="ad-tag">广告 <span class="ad-countdown" id="adCountdown">5</span>s</div>
+      <button class="ad-close" id="adClose" title="关闭（中途退出无奖励）">×</button>
+      <!-- 广告播放中 -->
+      <div class="ad-playing" id="adPlaying">
+        <div class="ad-content">
+          <div class="ad-emoji">🧠</div>
+          <div class="ad-slogan">记忆力挑战</div>
+          <div class="ad-sub">每天五分钟，训练你的大脑</div>
+          <div class="ad-fake-btn">立即下载</div>
+        </div>
+        <div class="ad-progress"><div class="ad-progress-bar" id="adProgressBar"></div></div>
+      </div>
+      <!-- 广告播完 -->
+      <div class="ad-done" id="adDone" hidden>
+        <div class="ad-done-icon">🎁</div>
+        <div class="ad-done-text">广告观看完成！</div>
+        <button class="btn primary ad-reward-btn" id="adReward">领取 +1 提示</button>
       </div>
     </div>
   </div>

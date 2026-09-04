@@ -1166,6 +1166,174 @@ button {
   width: 100%;
 }
 
+/* ========== 激励广告（模拟） ========== */
+.ad-preview {
+  background: linear-gradient(135deg, #94a3b8, #475569 55%, #1e293b);
+  box-shadow: 0 3px 10px rgba(71, 85, 105, 0.4);
+}
+
+.ad-buy {
+  background: #0ea5e9;
+}
+
+.ad-buy:hover:not(:disabled) {
+  background: #0284c7;
+}
+
+.ad-buy:disabled {
+  background: color-mix(in srgb, var(--text-light) 15%, var(--panel));
+  color: var(--text-light);
+}
+
+.ad-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 20px;
+}
+
+.ad-card {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  background: #0f172a;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.ad-tag {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+}
+
+.ad-countdown {
+  color: #fbbf24;
+  font-weight: 800;
+}
+
+.ad-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  border: none;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.ad-content {
+  padding: 56px 24px 40px;
+  text-align: center;
+  background: linear-gradient(160deg, #7c3aed 0%, #4f46e5 45%, #0ea5e9 100%);
+  color: #fff;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ad-emoji {
+  font-size: 64px;
+  animation: ad-float 1.8s ease-in-out infinite;
+}
+
+@keyframes ad-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.ad-slogan {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.ad-sub {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.ad-fake-btn {
+  margin-top: 14px;
+  background: #fff;
+  color: #4f46e5;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 10px 34px;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.ad-progress {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ad-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+  transition: width 0.2s linear;
+}
+
+.ad-done {
+  padding: 48px 24px 36px;
+  text-align: center;
+  background: linear-gradient(160deg, #064e3b, #065f46);
+  color: #fff;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  animation: rank-result-pop 0.3s ease;
+}
+
+.ad-done-icon {
+  font-size: 60px;
+}
+
+.ad-done-text {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.ad-reward-btn {
+  margin-top: 8px;
+  width: 100%;
+  background: #f59e0b;
+}
+
+.ad-reward-btn:hover {
+  background: #d97706;
+}
+
 .shop-item {
   background: var(--panel);
   border: 1.5px solid var(--border);

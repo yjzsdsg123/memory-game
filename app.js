@@ -1027,6 +1027,18 @@ function renderShop() {
     buyBtn.classList.add('poor');
   }
 
+  /* 看广告：今日剩余次数 */
+  const adLeft = getAdLeft();
+  $('shopAdLeft').textContent = adLeft;
+  const adBtn = $('watchAd');
+  if (adLeft <= 0) {
+    adBtn.textContent = '今日已看完';
+    adBtn.disabled = true;
+  } else {
+    adBtn.textContent = '📺 观看广告';
+    adBtn.disabled = false;
+  }
+
   grid.innerHTML = '';
   CARDBACKS.forEach((item) => {
     const isOwned = owned.includes(item.id);
@@ -1207,6 +1219,98 @@ $('payClose').addEventListener('click', closePay);
 $('payOverlay').addEventListener('click', (e) => {
   if (e.target === $('payOverlay')) closePay();
 });
+
+/* ================= 激励广告（模拟，每日限 3 次） ================= */
+/* 真实环境替换为 AdSense/穿山甲/微信广告 SDK 的 rewarded video，
+   在 onClose(isCompleted) 回调里发奖即可。 */
+const AD_DAILY_LIMIT = 3;
+const AD_SECONDS = 5;
+let adTimer = null;
+let adRewarded = false; /* 本次广告是否已领取，防重复发奖 */
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/* 今日剩余观看次数（跨天自动重置） */
+function getAdLeft() {
+  if (localStorage.getItem('mem_ad_date') !== todayStr()) return AD_DAILY_LIMIT;
+  const used = Number(localStorage.getItem('mem_ad_count')) || 0;
+  return Math.max(0, AD_DAILY_LIMIT - used);
+}
+
+function consumeAd() {
+  if (localStorage.getItem('mem_ad_date') !== todayStr()) {
+    localStorage.setItem('mem_ad_date', todayStr());
+    localStorage.setItem('mem_ad_count', '0');
+  }
+  localStorage.setItem('mem_ad_count', String((Number(localStorage.getItem('mem_ad_count')) || 0) + 1));
+}
+
+function stopAdTimer() {
+  if (adTimer) {
+    clearInterval(adTimer);
+    adTimer = null;
+  }
+}
+
+function closeAd(rewarded) {
+  stopAdTimer();
+  $('adOverlay').hidden = true;
+  $('adPlaying').hidden = false;
+  $('adDone').hidden = true;
+  $('adProgressBar').style.width = '0%';
+  $('adCountdown').textContent = AD_SECONDS;
+  if (!rewarded) renderShop(); /* 中途退出：刷新按钮（无变化） */
+}
+
+function startAd() {
+  if (getAdLeft() <= 0) {
+    sndMiss();
+    return;
+  }
+  adRewarded = false; /* 每次播放重置领奖标记 */
+  $('adOverlay').hidden = false;
+  $('adPlaying').hidden = false;
+  $('adDone').hidden = true;
+  sndFlip();
+  let left = AD_SECONDS;
+  $('adCountdown').textContent = left;
+  $('adProgressBar').style.width = '0%';
+  const tickMs = 100;
+  let elapsed = 0;
+  stopAdTimer();
+  adTimer = setInterval(() => {
+    elapsed += tickMs;
+    $('adProgressBar').style.width = Math.min(100, (elapsed / (AD_SECONDS * 1000)) * 100) + '%';
+    const remain = Math.ceil((AD_SECONDS * 1000 - elapsed) / 1000);
+    if (remain !== left) {
+      left = remain;
+      $('adCountdown').textContent = Math.max(0, left);
+    }
+    if (elapsed >= AD_SECONDS * 1000) {
+      stopAdTimer();
+      $('adPlaying').hidden = true;
+      $('adDone').hidden = false;
+      sndMatch();
+    }
+  }, tickMs);
+}
+
+/* 看完领取：+1 提示、今日次数 -1 */
+$('adReward').addEventListener('click', () => {
+  if (adRewarded) return; /* 防重复领取 */
+  adRewarded = true;
+  consumeAd();
+  addHints(1);
+  sndWin();
+  closeAd(true);
+  renderCoins();
+  renderShop();
+  renderHintBtns();
+});
+$('watchAd').addEventListener('click', startAd);
+$('adClose').addEventListener('click', () => closeAd(false));
 
 /* 初始化：保底 3 个提示 + 应用已装备的卡背 + 金币显示 */
 ensureHints();
