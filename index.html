@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>记忆力挑战 — 三种玩法训练大脑</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#8b5cf6" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-inner">
+      <div class="logo" id="navLogo">🧠 记忆力挑战</div>
+      <button id="soundToggle" class="theme-btn" title="切换音效">🔊</button>
+      <button id="themeToggle" class="theme-btn" title="切换主题">🌙</button>
+    </div>
+  </nav>
+
+  <main class="container">
+    <!-- ========== 首页 ========== -->
+    <section id="view-home">
+      <div class="game-grid">
+        <button class="game-card" id="openFlip">
+          <span class="game-emoji">🃏</span>
+          <b>翻牌配对</b>
+          <span class="game-desc">翻开卡片找出所有相同图案，越快越好</span>
+          <span class="best" id="bestFlip">最佳纪录：--</span>
+        </button>
+        <button class="game-card" id="openDigit">
+          <span class="game-emoji">🔢</span>
+          <b>数字记忆</b>
+          <span class="game-desc">数字一闪而过，看你能记住多长的数</span>
+          <span class="best" id="bestDigit">最佳纪录：--</span>
+        </button>
+        <button class="game-card" id="openSimon">
+          <span class="game-emoji">🎨</span>
+          <b>亮灯序列</b>
+          <span class="game-desc">记住灯光亮起的顺序，逐轮加长</span>
+          <span class="best" id="bestSimon">最佳纪录：--</span>
+        </button>
+        <button class="game-card" id="openRank">
+          <span class="game-emoji">🏆</span>
+          <b>排位赛</b>
+          <span class="game-desc">人机对战翻牌，赢积分升段位</span>
+          <span class="best" id="bestRank">段位：🥉青铜 · 0分</span>
+        </button>
+      </div>
+      <p class="tip">每天几分钟，锻炼工作记忆与专注力 ✨ 数据保存在本地浏览器</p>
+    </section>
+
+    <!-- ========== 翻牌配对 ========== -->
+    <section id="view-flip" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="flipBack">← 返回</button>
+        <div class="game-title">🃏 翻牌配对</div>
+        <div class="head-btns">
+          <button class="btn small ghost" id="flipHint" disabled>提示（3）</button>
+          <button class="btn small primary" id="flipRestart">重新开始</button>
+        </div>
+      </div>
+      <div class="hud">
+        <span>步数：<b id="flipMoves">0</b></span>
+        <span>用时：<b id="flipTime">00:00</b></span>
+        <span>已配对：<b id="flipMatched">0/8</b></span>
+      </div>
+      <div class="flip-grid" id="flipGrid"></div>
+      <div class="game-msg" id="flipMsg"></div>
+    </section>
+
+    <!-- ========== 数字记忆 ========== -->
+    <section id="view-digit" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="digitBack">← 返回</button>
+        <div class="game-title">🔢 数字记忆</div>
+        <div class="head-btns">
+          <button class="btn small ghost" id="digitHint">提示（3）</button>
+          <button class="btn small primary" id="digitRestart">重新开始</button>
+        </div>
+      </div>
+      <div class="hud">
+        <span>当前位数：<b id="digitLevel">4</b></span>
+        <span>最佳：<b id="digitBest">-</b></span>
+      </div>
+      <div class="digit-stage">
+        <div class="digit-config">
+          <label for="digitShowSec">每位显示</label>
+          <input id="digitShowSec" type="number" min="0.1" max="5" step="0.1" value="0.5" />
+          <span>秒（默认 0.5）</span>
+        </div>
+        <div class="digit-display" id="digitDisplay">?</div>
+        <div class="digit-input-row" id="digitInputRow" hidden>
+          <input id="digitInput" inputmode="numeric" autocomplete="off" placeholder="输入刚才看到的数字" />
+          <button class="btn primary" id="digitSubmit">提交</button>
+        </div>
+        <button class="btn primary" id="digitStart">开始挑战</button>
+      </div>
+      <div class="game-msg" id="digitMsg"></div>
+    </section>
+
+    <!-- ========== 亮灯序列 ========== -->
+    <section id="view-simon" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="simonBack">← 返回</button>
+        <div class="game-title">🎨 亮灯序列</div>
+        <div class="head-btns">
+          <button class="btn small ghost" id="simonHint" hidden>提示（3）</button>
+          <button class="btn small primary" id="simonRestart">重新开始</button>
+        </div>
+      </div>
+      <div class="hud">
+        <span>当前轮数：<b id="simonLevel">0</b></span>
+        <span>最佳：<b id="simonBest">-</b></span>
+      </div>
+      <div class="simon-board">
+        <button class="pad pad0" data-pad="0"></button>
+        <button class="pad pad1" data-pad="1"></button>
+        <button class="pad pad2" data-pad="2"></button>
+        <button class="pad pad3" data-pad="3"></button>
+      </div>
+      <div class="simon-actions">
+        <button class="btn primary" id="simonStart">开始挑战</button>
+      </div>
+      <div class="game-msg" id="simonMsg">点击“开始挑战”，记住灯光亮起的顺序</div>
+    </section>
+
+    <!-- ========== 排位赛 ========== -->
+    <section id="view-rank" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="rankBack">← 返回</button>
+        <div class="game-title">🏆 排位赛 · 翻牌对抗</div>
+        <button class="btn small primary" id="rankRestart">重新开始</button>
+      </div>
+      <div class="rank-bar">
+        <div class="rank-badge" id="rankBadge">🥉</div>
+        <div class="rank-info">
+          <b id="rankName">青铜</b>
+          <span id="rankPoints">0 积分</span>
+        </div>
+        <div class="rank-opp">🤖 对手：<span id="rankOppName">青铜守卫</span></div>
+      </div>
+      <div class="rank-score">
+        <div class="side you"><span>你</span><b id="rankYou">0</b></div>
+        <div class="vs">VS</div>
+        <div class="side ai"><b id="rankAi">0</b><span>AI</span></div>
+      </div>
+      <div class="turn-indicator" id="rankTurn">你的回合</div>
+      <div class="flip-grid" id="rankGrid"></div>
+      <div class="game-msg" id="rankMsg"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
