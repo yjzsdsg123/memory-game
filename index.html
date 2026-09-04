@@ -57,6 +57,12 @@
           <span class="game-desc">排位赛赚金币，购买精美卡背</span>
           <span class="best" id="bestShop">🪙 0 金币</span>
         </button>
+        <button class="game-card" id="openBoard">
+          <span class="game-emoji">📊</span>
+          <b>排行榜</b>
+          <span class="game-desc">排位积分全服排名，冲击榜首</span>
+          <span class="best" id="bestBoard">暂未上榜</span>
+        </button>
       </div>
       <p class="tip">每天几分钟，锻炼工作记忆与专注力 ✨ 数据保存在本地浏览器</p>
     </section>
@@ -229,6 +235,29 @@
       </div>
       <div class="shop-section-title">🎴 卡背皮肤</div>
       <div class="shop-grid" id="shopGrid"></div>
+    </section>
+
+    <!-- ========== 排行榜 ========== -->
+    <section id="view-board" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="boardBack">← 返回</button>
+        <div class="game-title">📊 排位排行榜</div>
+        <button class="btn small ghost" id="boardRefresh">🔄 刷新</button>
+      </div>
+      <div class="board-self" id="boardSelf">
+        <div class="board-self-rank" id="boardSelfRank">--</div>
+        <div class="board-self-info">
+          <b id="boardSelfName">未上榜</b>
+          <span id="boardSelfSub">登录并完成一局排位赛即可上榜</span>
+        </div>
+        <div class="board-self-points"><b id="boardSelfPts">0</b> 积分</div>
+      </div>
+      <div class="board-nick" id="boardNick">
+        <input type="text" id="nickInput" maxlength="12" placeholder="设置你的榜单位名（最多12字）" />
+        <button class="btn small primary" id="nickSave">保存</button>
+      </div>
+      <div class="board-tip" id="boardTip"></div>
+      <div class="board-list" id="boardList"></div>
     </section>
   </main>
 

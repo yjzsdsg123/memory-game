@@ -927,6 +927,192 @@ button {
   padding: 8px 10px;
 }
 
+/* ========== 排行榜 ========== */
+.board-self {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  opacity: 0.75;
+}
+
+.board-self.on {
+  border-color: var(--primary);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.18);
+  opacity: 1;
+}
+
+.board-self-rank {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--primary);
+  min-width: 52px;
+  text-align: center;
+}
+
+.board-self-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.board-self-info b {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board-self-info span {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+.board-self-points {
+  font-size: 13px;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.board-self-points b {
+  font-size: 20px;
+  color: #f59e0b;
+}
+
+.board-nick {
+  display: none;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.board-nick input {
+  flex: 1;
+  padding: 9px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.board-nick input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.board-tip {
+  font-size: 12px;
+  color: var(--text-light);
+  text-align: center;
+  margin-bottom: 10px;
+  min-height: 16px;
+}
+
+.board-loading {
+  text-align: center;
+  color: var(--text-light);
+  padding: 30px 0;
+  font-size: 14px;
+}
+
+.board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.board-row .b-rank {
+  width: 46px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+.board-row:nth-child(1) .b-rank,
+.board-row:nth-child(2) .b-rank,
+.board-row:nth-child(3) .b-rank {
+  font-size: 18px;
+}
+
+.board-row .b-name {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board-row .b-bot {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-light);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.board-row .b-me {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 5px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.board-row .b-tier {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.board-row .b-wl {
+  font-size: 12px;
+  color: var(--text-light);
+  width: 48px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.board-row .b-pts {
+  font-weight: 800;
+  color: #f59e0b;
+  width: 56px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-row.self {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+}
+
 /* ========== 激励广告（模拟） ========== */
 .ad-preview {
   background: linear-gradient(135deg, #94a3b8, #475569 55%, #1e293b);

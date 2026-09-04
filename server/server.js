@@ -19,6 +19,67 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
+const SCORES_PATH = path.join(DATA_DIR, 'scores.json');
+
+/* 排行榜机器人种子（保证榜单有内容，真人成绩合并后排序） */
+const BOT_SEED = [
+  { name: '记忆大师007', points: 1680, w: 142, d: 9, l: 23 },
+  { name: '过目不忘', points: 1590, w: 128, d: 11, l: 30 },
+  { name: '最强大脑', points: 1475, w: 116, d: 8, l: 33 },
+  { name: '卡牌仙人', points: 1320, w: 104, d: 14, l: 41 },
+  { name: '闪电快手', points: 1180, w: 96, d: 7, l: 47 },
+  { name: '专注之神', points: 1050, w: 88, d: 10, l: 44 },
+  { name: '记忆力爆棚', points: 940, w: 79, d: 6, l: 52 },
+  { name: '沉默配对王', points: 860, w: 72, d: 12, l: 55 },
+  { name: '翻牌小天才', points: 745, w: 63, d: 9, l: 58 },
+  { name: '青铜守门员', points: 620, w: 54, d: 8, l: 61 },
+  { name: '慢慢来比较快', points: 520, w: 46, d: 11, l: 63 },
+  { name: '随缘选手', points: 430, w: 38, d: 7, l: 66 },
+  { name: '三秒记忆', points: 350, w: 31, d: 6, l: 70 },
+  { name: '别翻我牌', points: 260, w: 24, d: 5, l: 72 },
+  { name: '萌新玩家', points: 180, w: 17, d: 4, l: 75 },
+  { name: '路过打酱油', points: 110, w: 10, d: 3, l: 78 },
+  { name: '第一次玩', points: 45, w: 4, d: 2, l: 80 },
+  { name: '人机友好大使', points: 10, w: 1, d: 1, l: 83 },
+];
+
+/* ---------------- 排行榜成绩存储（JSON 文件） ---------------- */
+function loadScores() {
+  try {
+    return JSON.parse(fs.readFileSync(SCORES_PATH, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveScores(scores) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(SCORES_PATH + '.tmp', JSON.stringify(scores, null, 2));
+  fs.renameSync(SCORES_PATH + '.tmp', SCORES_PATH);
+}
+
+/* 合并机器人与真人成绩，按积分降序（同积分按胜场），返回 Top50 */
+function buildLeaderboard() {
+  const scores = loadScores();
+  const list = BOT_SEED.map((b, i) => ({ rank: 0, name: b.name, points: b.points, w: b.w, d: 0, l: b.l, bot: true, id: 'bot' + i }));
+  for (const [phone, s] of Object.entries(scores)) {
+    list.push({
+      rank: 0,
+      name: s.nickname || phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2'),
+      points: s.points || 0,
+      w: s.w || 0,
+      d: s.d || 0,
+      l: s.l || 0,
+      bot: false,
+      id: phone,
+    });
+  }
+  list.sort((a, b) => b.points - a.points || b.w - a.w);
+  return list.slice(0, 50).map((e, i) => {
+    e.rank = i + 1;
+    return e;
+  });
+}
 
 /* config.json 缺失时自动生成沙盒默认配置（真实密钥文件已被 .gitignore 忽略） */
 if (!fs.existsSync(CONFIG_PATH)) {
@@ -248,7 +309,69 @@ const server = http.createServer(async (req, res) => {
     const token = u.searchParams.get('token') || req.headers['x-auth-token'];
     const phone = phoneByToken(token);
     if (!phone) return json(res, 401, { ok: false, error: '未登录或登录已过期' });
-    return json(res, 200, { ok: true, phone });
+    const scores = loadScores();
+    return json(res, 200, { ok: true, phone, nickname: (scores[phone] && scores[phone].nickname) || null });
+  }
+
+  /* 排行榜：机器人 + 真人合并排序 */
+  if (p === '/api/leaderboard' && req.method === 'GET') {
+    const list = buildLeaderboard();
+    const token = u.searchParams.get('token') || req.headers['x-auth-token'];
+    const phone = phoneByToken(token);
+    const self = phone ? list.find((e) => e.id === phone) : null;
+    return json(res, 200, { ok: true, list, self: self || null });
+  }
+
+  /* 提交成绩（需登录；每局结算后调用，以客户端最新战绩覆盖） */
+  if (p === '/api/leaderboard/submit' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录后再提交成绩' });
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const points = Math.max(0, Math.min(99999, Math.floor(Number(body.points)) || 0));
+      const w = Math.max(0, Math.floor(Number(body.w)) || 0);
+      const d = Math.max(0, Math.floor(Number(body.d)) || 0);
+      const l = Math.max(0, Math.floor(Number(body.l)) || 0);
+      const scores = loadScores();
+      const prev = scores[phone] || {};
+      scores[phone] = {
+        nickname: prev.nickname || null,
+        points,
+        w,
+        d,
+        l,
+        updatedAt: new Date().toISOString(),
+      };
+      saveScores(scores);
+      return json(res, 200, { ok: true });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 设置昵称（需登录；1-12 字符，去除控制字符与 HTML 特殊符号） */
+  if (p === '/api/me/nickname' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const nickname = String(body.nickname || '')
+        .replace(/[<>&"'\u0000-\u001f\u007f]/g, '')
+        .trim()
+        .slice(0, 12);
+      if (!nickname) return json(res, 400, { ok: false, error: '昵称不能为空（最多 12 个字符）' });
+      const scores = loadScores();
+      scores[phone] = Object.assign({ points: 0, w: 0, d: 0, l: 0 }, scores[phone], {
+        nickname,
+        updatedAt: new Date().toISOString(),
+      });
+      saveScores(scores);
+      return json(res, 200, { ok: true, nickname });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
   }
 
   json(res, 404, { ok: false, error: 'not found' });

@@ -131,6 +131,7 @@ function renderBest() {
   const rt = rankTierOf(rp);
   $('bestRank').textContent = `段位：${rt.icon}${rt.name} · ${rp}分`;
   $('bestShop').textContent = `🪙 ${getCoins()} 金币`;
+  $('bestBoard').textContent = rp > 0 ? `暂列第 ${localBoardRank()} 名（离线）` : '暂未上榜';
 }
 
 /* ================= 翻牌配对 ================= */
@@ -962,6 +963,7 @@ function settleRank() {
     showRankResult({ result, you, ai, delta, bonus, coins: coinsEarned, promoted, demoted, tier: newTier, stats });
   }, 1150));
   renderBest();
+  submitScore(); /* 登录后自动提交成绩到全服排行榜（离线静默跳过） */
 }
 
 function showRankResult({ result, you, ai, delta, bonus, coins, promoted, demoted, tier, stats }) {
@@ -1249,6 +1251,162 @@ $('buyHints').addEventListener('click', () => {
 $('buyFreeze').addEventListener('click', () => buyItem('freeze', 40));
 $('buyPeek').addEventListener('click', () => buyItem('peek', 30));
 $('navLogo').addEventListener('click', () => showView('home'));
+
+/* ================= 排行榜 ================= */
+/* 离线降级用的机器人种子（与后端 BOT_SEED 保持一致） */
+const LB_BOTS = [
+  { name: '记忆大师007', points: 1680, w: 142, l: 23 },
+  { name: '过目不忘', points: 1590, w: 128, l: 30 },
+  { name: '最强大脑', points: 1475, w: 116, l: 33 },
+  { name: '卡牌仙人', points: 1320, w: 104, l: 41 },
+  { name: '闪电快手', points: 1180, w: 96, l: 47 },
+  { name: '专注之神', points: 1050, w: 88, l: 44 },
+  { name: '记忆力爆棚', points: 940, w: 79, l: 52 },
+  { name: '沉默配对王', points: 860, w: 72, l: 55 },
+  { name: '翻牌小天才', points: 745, w: 63, l: 58 },
+  { name: '青铜守门员', points: 620, w: 54, l: 61 },
+  { name: '慢慢来比较快', points: 520, w: 46, l: 63 },
+  { name: '随缘选手', points: 430, w: 38, l: 66 },
+  { name: '三秒记忆', points: 350, w: 31, l: 70 },
+  { name: '别翻我牌', points: 260, w: 24, l: 72 },
+  { name: '萌新玩家', points: 180, w: 17, l: 75 },
+  { name: '路过打酱油', points: 110, w: 10, l: 78 },
+  { name: '第一次玩', points: 45, w: 4, l: 80 },
+  { name: '人机友好大使', points: 10, w: 1, l: 83 },
+];
+
+function getToken() {
+  return localStorage.getItem('mem_token') || '';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* 每局结算后自动提交成绩（需登录；离线静默跳过，下局再试） */
+async function submitScore() {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const s = getRankStats();
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 6000);
+    await fetch(PAY_API_BASE + '/api/leaderboard/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+      body: JSON.stringify({ points: getRankPoints(), w: s.w, d: s.d, l: s.l }),
+      signal: ctrl.signal,
+    });
+  } catch { /* 离线忽略 */ }
+}
+
+/* 离线模式下按机器人种子估算名次 */
+function localBoardRank() {
+  const pts = getRankPoints();
+  let rank = 1;
+  for (const b of LB_BOTS) if (b.points > pts) rank += 1;
+  return rank;
+}
+
+async function loadBoard() {
+  const tip = $('boardTip');
+  const listEl = $('boardList');
+  listEl.innerHTML = '<div class="board-loading">⏳ 榜单加载中…</div>';
+  tip.textContent = '';
+  const phone = localStorage.getItem('mem_user') || '';
+  const token = getToken();
+  let list, self, online = false;
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 6000);
+    const url = PAY_API_BASE + '/api/leaderboard' + (token ? '?token=' + encodeURIComponent(token) : '');
+    const r = await fetch(url, { signal: ctrl.signal });
+    const j = await r.json();
+    if (!j.ok) throw new Error('bad');
+    list = j.list;
+    self = j.self;
+    online = true;
+  } catch {
+    /* 离线降级：机器人 + 本机成绩 */
+    const s = getRankStats();
+    const played = s.w + s.d + s.l > 0 || getRankPoints() > 0;
+    list = LB_BOTS.map((b, i) => ({ rank: 0, name: b.name, points: b.points, w: b.w, d: 0, l: b.l, bot: true, id: 'bot' + i }));
+    if (played) {
+      list.push({ rank: 0, name: phone ? maskPhone(phone) : '我', points: getRankPoints(), w: s.w, d: s.d, l: s.l, bot: false, id: 'me' });
+    }
+    list.sort((a, b) => b.points - a.points || b.w - a.w);
+    list = list.slice(0, 50).map((e, i) => { e.rank = i + 1; return e; });
+    self = played ? list.find((e) => e.id === 'me') : null;
+    tip.textContent = '⚠️ 未连接到服务器，显示离线榜单；登录后打排位赛可参与全服排名';
+  }
+  renderBoard(list, self, online, phone);
+  $('boardNick').style.display = token ? 'flex' : 'none';
+}
+
+function renderBoard(list, self, online, phone) {
+  if (self) {
+    $('boardSelfRank').textContent = self.rank <= 50 ? '#' + self.rank : '50+';
+    $('boardSelfName').textContent = self.name;
+    const tier = rankTierOf(self.points);
+    $('boardSelfSub').textContent = `${tier.icon}${tier.name} · ${self.w}胜${self.d ? self.d + '平' : ''}${self.l}负`;
+    $('boardSelfPts').textContent = self.points;
+    $('boardSelf').classList.add('on');
+  } else {
+    $('boardSelfRank').textContent = '--';
+    $('boardSelfName').textContent = getToken() ? '暂未上榜' : '未登录';
+    $('boardSelfSub').textContent = getToken() ? '完成一局排位赛即可上榜' : '登录后成绩可进入全服榜单';
+    $('boardSelfPts').textContent = getRankPoints();
+    $('boardSelf').classList.remove('on');
+  }
+  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  $('boardList').innerHTML = list.map((e) => {
+    const tier = rankTierOf(e.points);
+    const isSelf = (online && !e.bot && phone && e.id === phone) || (!online && e.id === 'me');
+    return `<div class="board-row${isSelf ? ' self' : ''}">
+      <span class="b-rank">${medals[e.rank] || '#' + e.rank}</span>
+      <span class="b-name">${escapeHtml(e.name)}${e.bot ? '<em class="b-bot">AI</em>' : ''}${isSelf ? '<em class="b-me">我</em>' : ''}</span>
+      <span class="b-tier">${tier.icon}</span>
+      <span class="b-wl">${e.w}胜</span>
+      <span class="b-pts">${e.points}</span>
+    </div>`;
+  }).join('');
+  const pts = getRankPoints();
+  boardOnline = online;
+  boardSelfRank = self ? self.rank : null;
+  $('bestBoard').textContent = pts > 0
+    ? (online && self ? `全服第 ${self.rank} 名` : `暂列第 ${localBoardRank()} 名`)
+    : '暂未上榜';
+}
+
+async function saveNickname() {
+  const token = getToken();
+  const nickname = $('nickInput').value.trim();
+  if (!token) { $('boardTip').textContent = '请先登录后再设置昵称'; return; }
+  if (!nickname) { $('boardTip').textContent = '昵称不能为空（最多 12 个字符）'; return; }
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 6000);
+    const r = await fetch(PAY_API_BASE + '/api/me/nickname', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+      body: JSON.stringify({ nickname }),
+      signal: ctrl.signal,
+    });
+    const j = await r.json();
+    if (!j.ok) { $('boardTip').textContent = j.error || '保存失败'; sndMiss(); return; }
+    $('nickInput').value = '';
+    $('boardTip').textContent = '✅ 昵称已保存：' + j.nickname;
+    sndMatch();
+    await loadBoard();
+  } catch {
+    $('boardTip').textContent = '服务器未连接，暂时无法保存昵称';
+  }
+}
+
+$('openBoard').addEventListener('click', () => { showView('board'); loadBoard(); });
+$('boardBack').addEventListener('click', () => showView('home'));
+$('boardRefresh').addEventListener('click', loadBoard);
+$('nickSave').addEventListener('click', saveNickname);
 
 /* ================= 后端服务地址（短信登录等接口使用） ================= */
 const PAY_API_BASE = 'http://localhost:8080';
