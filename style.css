@@ -2051,6 +2051,7 @@ body[data-cardback='gold'] .face.back {
   gap: 4px;
   transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
   z-index: 2;
+  transform-style: preserve-3d;
   transform-origin: 50% 100%;
   transform: rotateX(calc(-1 * var(--tilt, 52deg)));
 }
@@ -2069,6 +2070,128 @@ body[data-cardback='gold'] .face.back {
 @keyframes wbuildPulse {
   0%, 100% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.22), 0 8px 18px rgba(35, 32, 58, 0.2); }
   50% { box-shadow: 0 0 0 7px rgba(139, 92, 246, 0.32), 0 8px 18px rgba(35, 32, 58, 0.2); }
+}
+
+/* 建筑 3D 侧墙与屋顶（在建筑立牌局部坐标系里旋出厚度，向后延伸） */
+.wbb-side, .wbb-roof {
+  position: absolute;
+  pointer-events: none;
+}
+.wbb-side {
+  top: 0;
+  width: 44px;
+  height: 100%;
+  background: color-mix(in srgb, var(--panel) 56%, #241d40);
+}
+.wbb-side.l {
+  left: -44px;
+  transform-origin: 100% 50%;
+  transform: rotateY(-90deg);
+  background: color-mix(in srgb, var(--panel) 42%, #241d40);
+}
+.wbb-side.r {
+  left: 100%;
+  transform-origin: 0 50%;
+  transform: rotateY(90deg);
+}
+.wbb-roof {
+  left: -12px;
+  right: -12px;
+  top: 0;
+  height: 46px;
+  transform-origin: 50% 0;
+  transform: rotateX(-105deg);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 60%, #2a2350), color-mix(in srgb, var(--primary) 42%, #2a2350));
+  border-radius: 10px 10px 4px 4px;
+}
+
+/* 贴地影子（地面平面子元素，天然躺平） */
+.wshadow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(30, 26, 58, 0.22), transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+}
+.wshadow-s {
+  height: 12px;
+  opacity: 0.8;
+}
+.wchar-shadow {
+  width: 44px;
+  height: 13px;
+  margin: -6px 0 0 -22px;
+  transition: transform 0.09s linear;
+}
+
+/* 天空飘云（2D 屏幕层，DOM 在 stage 之前=画在场景后面） */
+.wcloud {
+  position: absolute;
+  left: -170px;
+  width: 120px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: 40px -16px 0 -6px rgba(255, 255, 255, 0.92), -36px -10px 0 -8px rgba(255, 255, 255, 0.85);
+  animation: wcloudDrift linear infinite;
+}
+.wcloud.c1 { top: 8%; animation-duration: 75s; animation-delay: -22s; }
+.wcloud.c2 { top: 16%; animation-duration: 100s; animation-delay: -60s; opacity: 0.8; transform: scale(0.8); }
+.wcloud.c3 { top: 5%; animation-duration: 130s; animation-delay: -100s; opacity: 0.65; transform: scale(0.62); }
+@keyframes wcloudDrift {
+  to { translate: 960px 0; }
+}
+[data-theme='dark'] .wcloud {
+  background: rgba(186, 196, 232, 0.4);
+  box-shadow: 40px -16px 0 -6px rgba(186, 196, 232, 0.4), -36px -10px 0 -8px rgba(186, 196, 232, 0.35);
+}
+
+/* 喷泉水花（挂在 ⛲ 立牌内部=立面上抛）与表情浮动 */
+.world-deco .de-t {
+  display: block;
+}
+.fountain .de-t {
+  animation: wfBob 2.4s ease-in-out infinite;
+}
+@keyframes wfBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.fountain .fsp {
+  position: absolute;
+  left: 50%;
+  bottom: 58%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+  animation: wfountain 1.3s ease-in infinite;
+  pointer-events: none;
+}
+.fountain .f2 { animation-delay: 0.43s; --fdx: 7px; }
+.fountain .f3 { animation-delay: 0.86s; --fdx: -6px; }
+@keyframes wfountain {
+  0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+  12% { opacity: 1; }
+  55% { transform: translate(var(--fdx, 5px), -20px) scale(1); opacity: 1; }
+  100% { transform: translate(calc(var(--fdx, 5px) * 1.6), 6px) scale(0.8); opacity: 0; }
+}
+
+/* 蝴蝶/小鸟飞舞：立牌 rotateX 不动，用独立 translate 属性飞 */
+.world-flyer {
+  animation: wfly 9s ease-in-out infinite;
+}
+@keyframes wfly {
+  0%, 100% { translate: 0 0; }
+  25% { translate: 36px -18px; }
+  50% { translate: -20px 10px; }
+  75% { translate: 14px 20px; }
 }
 
 /* ===== 翻牌学院 ===== */
@@ -2433,6 +2556,12 @@ body[data-cardback='gold'] .face.back {
     animation: none;
   }
   .world-building.near {
+    animation: none;
+  }
+  .wcloud,
+  .world-flyer,
+  .fountain .de-t,
+  .fountain .fsp {
     animation: none;
   }
 }

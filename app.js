@@ -2354,9 +2354,9 @@ const BOT_LINES = [
 const WORLD_DECOS = [
   { t: '🌳', x: 24, y: 30 }, { t: '🌳', x: 945, y: 40 }, { t: '🌲', x: 18, y: 300 },
   { t: '🌲', x: 950, y: 290 }, { t: '🌻', x: 250, y: 220 }, { t: '🌻', x: 700, y: 225 },
-  { t: '🪨', x: 340, y: 250 }, { t: '🪨', x: 640, y: 265 }, { t: '⛲', x: 500, y: 512 },
+  { t: '🪨', x: 340, y: 250 }, { t: '🪨', x: 640, y: 265 }, { t: '⛲', x: 500, y: 512, fx: true },
   { t: '🪧', x: 330, y: 628 }, { t: '🌷', x: 150, y: 610 }, { t: '🌷', x: 860, y: 610 },
-  { t: '🦋', x: 610, y: 180 }, { t: '🐦', x: 200, y: 150 },
+  { t: '🦋', x: 610, y: 180, fly: true }, { t: '🐦', x: 200, y: 150, fly: true },
 ];
 
 /* ---- 角色形象（localStorage） ---- */
@@ -2400,11 +2400,17 @@ function makeCharEl(cls, emoji, name) {
   el.innerHTML = '<span class="wc-emoji"></span><span class="wc-name"></span>';
   el.querySelector('.wc-emoji').textContent = emoji;
   el.querySelector('.wc-name').textContent = name;
+  /* 贴地影子：挂在地面平面上，随 placeChar 同步移动 */
+  const sh = document.createElement('i');
+  sh.className = 'wshadow wchar-shadow';
+  $('worldGround').appendChild(sh);
+  el._shadow = sh;
   return el;
 }
 
 function placeChar(el, x, y) {
   el.style.transform = `translate(${x}px, ${y}px) rotateX(-${WORLD_TILT}deg)`;
+  if (el._shadow) el._shadow.style.transform = `translate(${x}px, ${y}px)`;
   el.style.zIndex = String(Math.round(y) + 5);
 }
 
@@ -2415,9 +2421,12 @@ function buildWorld() {
   $('worldGround').innerHTML =
     '<div class="world-path ph" style="top:560px"></div>' +
     '<div class="world-path pv" style="left:500px"></div>' +
-    WORLD_DECOS.map((d) => `<span class="world-deco" style="left:${d.x}px;top:${d.y}px">${d.t}</span>`).join('');
+    WORLD_BUILDINGS.map((b) => `<i class="wshadow" style="left:${b.x - 14}px;top:${b.y + b.h - 12}px;width:${b.w + 28}px"></i>`).join('') +
+    WORLD_DECOS.filter((d) => !d.fly).map((d) => `<i class="wshadow wshadow-s" style="left:${d.x - 14}px;top:${d.y - 6}px;width:28px"></i>`).join('') +
+    WORLD_DECOS.map((d) => `<span class="world-deco${d.fly ? ' world-flyer' : ''}${d.fx ? ' fountain' : ''}" style="left:${d.x}px;top:${d.y}px"><i class="de-t">${d.t}</i>${d.fx ? '<i class="fsp f1"></i><i class="fsp f2"></i><i class="fsp f3"></i>' : ''}</span>`).join('');
   $('worldBuildings').innerHTML = WORLD_BUILDINGS.map((b) =>
     `<button class="world-building" id="wbld-${b.id}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px" data-view="${b.view}" type="button">
+      <i class="wbb-side l"></i><i class="wbb-side r"></i><i class="wbb-roof"></i>
       <span class="wb-emoji">${b.emoji}</span><span class="wb-name">${b.name}</span>
     </button>`).join('');
   $('worldBuildings').addEventListener('click', (e) => {
@@ -2621,7 +2630,7 @@ async function worldPoll() {
 function syncRemotes(players) {
   world.remotes = players;
   const layer = $('worldChars');
-  layer.querySelectorAll('.char-remote').forEach((el) => el.remove());
+  layer.querySelectorAll('.char-remote').forEach((el) => { if (el._shadow) el._shadow.remove(); el.remove(); });
   for (const p of players) {
     const el = makeCharEl(
       'char-remote ' + (p.isFriend ? 'char-friend' : 'char-guest'),
@@ -2704,7 +2713,7 @@ function worldTick() {
 function onWorldKey(e) {
   if ($('charOverlay') && !$('charOverlay').hidden) return; /* 角色弹窗打开时不抢按键 */
   const k = e.key.toLowerCase();
-  const map = { arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down', arrowleft: 'left', a: 'left', d: 'right' };
+  const map = { arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down', arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right' };
   const dir = map[k];
   if (dir) {
     world.keys[dir] = e.type === 'keydown';
