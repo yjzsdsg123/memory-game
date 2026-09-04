@@ -1207,6 +1207,102 @@ button {
   cursor: pointer;
 }
 
+/* ========== 好友系统 ========== */
+.friends-offline {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted, #94a3b8);
+}
+.friends-offline p { margin: 4px 0; }
+.friends-offline-sub { font-size: .9em; opacity: .8; }
+
+.friends-tip {
+  text-align: center;
+  color: var(--muted, #94a3b8);
+  font-size: .9em;
+  padding: 8px 0 12px;
+}
+
+.friend-search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.friend-search-bar input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 2px solid var(--border, #334155);
+  border-radius: 10px;
+  font-size: 15px;
+  background: var(--card, #1e293b);
+  color: var(--fg, #f1f5f9);
+  outline: none;
+}
+.friend-search-bar input:focus {
+  border-color: var(--accent, #8b5cf6);
+}
+
+.friends-list { display: flex; flex-direction: column; gap: 8px; }
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--card, #1e293b);
+  border: 1px solid var(--border, #334155);
+  border-radius: 12px;
+  transition: border-color .15s;
+}
+.friend-card:hover { border-color: var(--accent, #8b5cf6); }
+
+.f-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: bold;
+  background: var(--accent-dim, rgba(139, 92, 246, .15));
+  color: var(--accent, #8b5cf6);
+  flex-shrink: 0;
+  position: relative;
+}
+.f-avatar .f-online, .f-avatar .f-offline {
+  position: absolute;
+  bottom: -2px; right: -2px;
+  font-size: 12px;
+  border-radius: 50%;
+  background: var(--card, #1e293b);
+  padding: 0 2px;
+}
+.f-online { color: #22c55e; }
+.f-offline { color: #64748b; }
+
+.f-info { flex: 1; min-width: 0; }
+.f-name { font-size: 1em; display: block; }
+.f-stats { font-size: .82em; color: var(--muted, #94a3b8); display: block; margin-top: 2px; }
+
+.f-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.f-pending { font-size: .85em; color: var(--muted, #94a3b8); padding: 4px 8px; }
+
+.friend-card.challenge-invite {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, .08);
+}
+
+.req-badge {
+  display: inline-block;
+  min-width: 18px; height: 18px;
+  line-height: 18px;
+  text-align: center;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 9px;
+  font-size: 11px;
+  font-style: normal;
+  margin-left: 4px;
+  padding: 0 5px;
+}
+
 /* ========== 激励广告（模拟） ========== */
 .ad-preview {
   background: linear-gradient(135deg, #94a3b8, #475569 55%, #1e293b);

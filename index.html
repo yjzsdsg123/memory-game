@@ -63,6 +63,12 @@
           <span class="game-desc">排位积分全服排名，冲击榜首</span>
           <span class="best" id="bestBoard">暂未上榜</span>
         </button>
+        <button class="game-card" id="openFriends">
+          <span class="game-emoji">👥</span>
+          <b>好友</b>
+          <span class="game-desc">添加好友，挑战对战，查看战绩</span>
+          <span class="best" id="bestFriends">--</span>
+        </button>
       </div>
       <p class="tip">每天几分钟，锻炼工作记忆与专注力 ✨ 数据保存在本地浏览器</p>
     </section>
@@ -302,6 +308,47 @@
       </div>
       <div class="board-tip" id="boardTip"></div>
       <div class="board-list" id="boardList"></div>
+    </section>
+
+    <!-- ========== 好友 ========== -->
+    <section id="view-friends" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="friendsBack">← 返回</button>
+        <div class="game-title">👥 好友</div>
+      </div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tabFriendsList">📋 好友列表</button>
+        <button class="mode-tab" id="tabFriendsAdd">🔍 添加好友</button>
+        <button class="mode-tab" id="tabFriendsReq">📬 请求<em class="req-badge" id="reqBadge" hidden>0</em></button>
+      </div>
+
+      <!-- 离线/未登录提示 -->
+      <div class="friends-offline" id="friendsOffline" hidden>
+        <p>⚠️ 需要登录账号并连接到对战服务器才能使用好友功能</p>
+        <p class="friends-offline-sub" id="friendsOfflineSub"></p>
+      </div>
+
+      <!-- 好友列表 -->
+      <div id="friendsListArea">
+        <div class="friends-tip" id="friendsListTip">⏳ 加载中…</div>
+        <div class="friends-list" id="friendsList"></div>
+      </div>
+
+      <!-- 搜索添加 -->
+      <div id="friendsAddArea" hidden>
+        <div class="friend-search-bar">
+          <input type="text" id="friendSearchInput" maxlength="20" placeholder="输入昵称搜索玩家" autocomplete="off" />
+          <button class="btn small primary" id="friendSearchBtn">🔍 搜索</button>
+        </div>
+        <div class="friends-tip" id="friendSearchTip"></div>
+        <div class="friends-list" id="friendSearchResults"></div>
+      </div>
+
+      <!-- 好友请求 -->
+      <div id="friendsReqArea" hidden>
+        <div class="friends-tip" id="friendsReqTip"></div>
+        <div class="friends-list" id="friendsReqList"></div>
+      </div>
     </section>
   </main>
 

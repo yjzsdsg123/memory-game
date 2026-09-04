@@ -110,10 +110,12 @@ const views = ['home', 'flip', 'digit', 'simon', 'rank'];
 
 function showView(name) {
   stopAllGames();
+  if (name !== 'friends') stopFriendPoll();
   document.querySelectorAll('main > section[id^="view-"]').forEach((s) => {
     s.hidden = s.id !== 'view-' + name;
   });
   if (name === 'home') renderBest();
+  if (name === 'friends') { loadFriends(); startFriendPoll(); }
   window.scrollTo(0, 0);
 }
 
@@ -132,6 +134,7 @@ function renderBest() {
   $('bestRank').textContent = `段位：${rt.icon}${rt.name} · ${rp}分`;
   $('bestShop').textContent = `🪙 ${getCoins()} 金币`;
   $('bestBoard').textContent = rp > 0 ? `暂列第 ${localBoardRank()} 名（离线）` : '暂未上榜';
+  $('bestFriends').textContent = friendData ? (friendData.friends || []).length + ' 位好友' : '--';
 }
 
 /* ================= 翻牌配对 ================= */
@@ -1411,6 +1414,18 @@ $('boardBack').addEventListener('click', () => showView('home'));
 $('boardRefresh').addEventListener('click', loadBoard);
 $('nickSave').addEventListener('click', saveNickname);
 
+/* 好友系统事件 */
+$('openFriends').addEventListener('click', () => showView('friends'));
+$('friendsBack').addEventListener('click', () => showView('home'));
+$('tabFriendsList').addEventListener('click', () => showFriendsView('list'));
+$('tabFriendsAdd').addEventListener('click', () => showFriendsView('add'));
+$('tabFriendsReq').addEventListener('click', () => showFriendsView('req'));
+$('friendSearchBtn').addEventListener('click', searchFriends);
+$('friendSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchFriends(); });
+$('friendsList').addEventListener('click', handleFriendAction);
+$('friendsReqList').addEventListener('click', handleFriendAction);
+$('friendSearchResults').addEventListener('click', handleFriendAction);
+
 /* ================= 真人对战（PvP，服务器权威牌桌） ================= */
 let pvpPoll = null;
 let pvpState = 'idle'; /* idle | waiting | playing | over */
@@ -1664,6 +1679,267 @@ $('pvpLeave').addEventListener('click', () => pvpLeave(false));
 
 /* ================= 后端服务地址（短信登录/排行榜/对战接口使用） ================= */
 const PAY_API_BASE = 'http://localhost:8080';
+
+/* ================= 好友系统 ================= */
+let friendPoll = null;
+let friendData = null; /* { friends, incoming, outgoing, challenges, challenge } */
+
+async function friendGet(path) {
+  const r = await fetch(PAY_API_BASE + path + '?token=' + encodeURIComponent(getToken()));
+  return r.json();
+}
+async function friendPost(path, body) {
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), 8000);
+  const r = await fetch(PAY_API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify(body || {}),
+    signal: ctrl.signal,
+  });
+  return r.json();
+}
+
+function stopFriendPoll() {
+  if (friendPoll) { clearInterval(friendPoll); friendPoll = null; }
+}
+
+function friendTierIcon(points) {
+  const t = rankTierOf(points || 0);
+  return t.icon;
+}
+
+/* 加载好友列表 + 请求 + 对战邀请 */
+async function loadFriends() {
+  if (!getToken()) {
+    $('friendsOffline').hidden = false;
+    $('friendsOfflineSub').textContent = '请先登录账号';
+    $('friendsListArea').style.display = 'none';
+    $('friendsAddArea').style.display = 'none';
+    $('friendsReqArea').style.display = 'none';
+    $('bestFriends').textContent = '未登录';
+    return;
+  }
+  try {
+    const j = await friendGet('/api/friends');
+    if (!j.ok) throw new Error(j.error);
+    friendData = j;
+    $('friendsOffline').hidden = true;
+    $('friendsListArea').style.display = '';
+    $('friendsAddArea').style.display = '';
+    $('friendsReqArea').style.display = '';
+    renderFriendList(j.friends || []);
+    renderFriendRequests(j.incoming || [], j.outgoing || []);
+    renderChallengeInvites(j.challenges || []);
+    /* 请求标签角标 */
+    const reqCount = (j.incoming || []).length + (j.challenges || []).length;
+    $('reqBadge').textContent = reqCount;
+    $('reqBadge').hidden = reqCount === 0;
+    $('bestFriends').textContent = (j.friends || []).length + ' 位好友';
+    /* 检查挑战被接受 → 自动进房间 */
+    if (j.challenge && j.challenge.status === 'accepted' && j.challenge.room) {
+      showView('rank');
+      $('tabPvp').click();
+      pvpEnterRoom(j.challenge.room);
+      startPvpPoll();
+      sndMatch();
+    }
+  } catch {
+    friendData = null;
+    $('friendsOffline').hidden = false;
+    $('friendsOfflineSub').textContent = '无法连接服务器，请确认后端正在运行';
+    $('friendsListArea').style.display = 'none';
+    $('friendsAddArea').style.display = 'none';
+    $('friendsReqArea').style.display = 'none';
+    $('bestFriends').textContent = '--';
+  }
+}
+
+function renderFriendList(friends) {
+  const tip = $('friendsListTip');
+  const list = $('friendsList');
+  if (!friends.length) {
+    tip.textContent = '还没有好友，去「添加好友」页搜索昵称加好友吧';
+    list.innerHTML = '';
+    return;
+  }
+  tip.textContent = friends.length + ' 位好友';
+  list.innerHTML = friends.map((f) => {
+    const icon = friendTierIcon(f.points);
+    const dot = f.online ? '<span class="f-online" title="在线">●</span>' : '<span class="f-offline" title="离线">●</span>';
+    return `<div class="friend-card">
+      <div class="f-avatar">${dot}${escapeHtml(f.nickname.charAt(0))}</div>
+      <div class="f-info">
+        <b class="f-name">${escapeHtml(f.nickname)}</b>
+        <span class="f-stats">${icon} ${f.points}分 · ${f.w}胜${f.l}负 · ${f.maskedPhone}</span>
+      </div>
+      <div class="f-actions">
+        <button class="btn small primary" data-challenge="${f.phone}" ${f.online ? '' : 'disabled title="对方离线"'}>⚔️ 挑战</button>
+        <button class="btn small ghost" data-remove="${f.phone}">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderFriendRequests(incoming, outgoing) {
+  const tip = $('friendsReqTip');
+  const list = $('friendsReqList');
+  if (!incoming.length && !outgoing.length) {
+    tip.textContent = '暂无好友请求';
+    list.innerHTML = '';
+    return;
+  }
+  tip.textContent = '';
+  const incHtml = incoming.map((f) => {
+    const icon = friendTierIcon(f.points);
+    return `<div class="friend-card req-in">
+      <div class="f-avatar">📥${escapeHtml(f.nickname.charAt(0))}</div>
+      <div class="f-info">
+        <b class="f-name">${escapeHtml(f.nickname)}</b>
+        <span class="f-stats">${icon} ${f.points}分 · ${f.maskedPhone}</span>
+      </div>
+      <div class="f-actions">
+        <button class="btn small primary" data-accept="${f.phone}">✅ 接受</button>
+        <button class="btn small ghost" data-reject="${f.phone}">❌ 拒绝</button>
+      </div>
+    </div>`;
+  }).join('');
+  const outHtml = outgoing.map((f) => {
+    return `<div class="friend-card req-out">
+      <div class="f-avatar">📤${escapeHtml(f.nickname.charAt(0))}</div>
+      <div class="f-info">
+        <b class="f-name">${escapeHtml(f.nickname)}</b>
+        <span class="f-stats">等待对方确认 · ${f.maskedPhone}</span>
+      </div>
+      <div class="f-actions"><span class="f-pending">等待中…</span></div>
+    </div>`;
+  }).join('');
+  list.innerHTML = incHtml + outHtml;
+}
+
+function renderChallengeInvites(challenges) {
+  if (!challenges || !challenges.length) return;
+  /* 在请求列表顶部插入对战邀请 */
+  const html = challenges.map((ch) => {
+    return `<div class="friend-card challenge-invite">
+      <div class="f-avatar">⚔️</div>
+      <div class="f-info">
+        <b class="f-name">${escapeHtml(ch.fromNickname)}</b>
+        <span class="f-stats">向你发起对战挑战 · 60秒内有效</span>
+      </div>
+      <div class="f-actions">
+        <button class="btn small primary" data-challenge-accept="${ch.id}">⚔️ 应战</button>
+        <button class="btn small ghost" data-challenge-reject="${ch.id}">跳过</button>
+      </div>
+    </div>`;
+  }).join('');
+  const list = $('friendsReqList');
+  list.insertAdjacentHTML('afterbegin', html);
+  $('friendsReqTip').textContent = '';
+}
+
+/* 搜索用户 */
+async function searchFriends() {
+  const q = $('friendSearchInput').value.trim();
+  const tip = $('friendSearchTip');
+  const results = $('friendSearchResults');
+  if (q.length < 1) { tip.textContent = ''; results.innerHTML = ''; return; }
+  tip.textContent = '⏳ 搜索中…';
+  results.innerHTML = '';
+  try {
+    const j = await friendPost('/api/friends/search', { nickname: q });
+    if (!j.ok) throw new Error(j.error);
+    if (!j.results.length) {
+      tip.textContent = '未找到匹配的玩家（对方需先登录并设置昵称）';
+      return;
+    }
+    tip.textContent = '找到 ' + j.results.length + ' 位玩家';
+    results.innerHTML = j.results.map((r) => {
+      const icon = friendTierIcon(r.points);
+      let btn;
+      if (r.isFriend) btn = '<span class="f-pending">已是好友</span>';
+      else if (r.reqSent) btn = '<span class="f-pending">已发送</span>';
+      else btn = `<button class="btn small primary" data-addfriend="${r.phone}">➕ 加好友</button>`;
+      return `<div class="friend-card">
+        <div class="f-avatar">🔍${escapeHtml(r.nickname.charAt(0))}</div>
+        <div class="f-info">
+          <b class="f-name">${escapeHtml(r.nickname)}</b>
+          <span class="f-stats">${icon} ${r.points}分 · ${r.maskedPhone}</span>
+        </div>
+        <div class="f-actions">${btn}</div>
+      </div>`;
+    }).join('');
+  } catch {
+    tip.textContent = '搜索失败，请确认服务器正在运行';
+  }
+}
+
+/* 事件处理 */
+async function handleFriendAction(e) {
+  const btn = e.target.closest('[data-challenge],[data-remove],[data-accept],[data-reject],[data-addfriend],[data-challenge-accept],[data-challenge-reject]');
+  if (!btn) return;
+  if (btn.dataset.challenge) {
+    btn.disabled = true;
+    btn.textContent = '发送中…';
+    const j = await friendPost('/api/friends/challenge', { phone: btn.dataset.challenge });
+    if (j.ok) { btn.textContent = '✅ 已发送'; btn.className = 'btn small ghost'; sndFlip(); }
+    else { btn.disabled = false; btn.textContent = '⚔️ 挑战'; sndMiss(); alert(j.error); }
+  } else if (btn.dataset.remove) {
+    if (!confirm('确定删除这位好友？')) return;
+    await friendPost('/api/friends/remove', { phone: btn.dataset.remove });
+    sndFlip();
+    loadFriends();
+  } else if (btn.dataset.accept) {
+    await friendPost('/api/friends/respond', { phone: btn.dataset.accept, accept: true });
+    sndWin();
+    loadFriends();
+  } else if (btn.dataset.reject) {
+    await friendPost('/api/friends/respond', { phone: btn.dataset.reject, accept: false });
+    sndFlip();
+    loadFriends();
+  } else if (btn.dataset.addfriend) {
+    btn.disabled = true;
+    btn.textContent = '发送中…';
+    const j = await friendPost('/api/friends/request', { phone: btn.dataset.addfriend });
+    if (j.ok) {
+      btn.textContent = j.mutual ? '✅ 已互加' : '✅ 已发送';
+      btn.className = 'btn small ghost';
+      sndFlip();
+    } else {
+      btn.disabled = false; btn.textContent = '➕ 加好友'; sndMiss(); alert(j.error);
+    }
+  } else if (btn.dataset.challengeAccept) {
+    const j = await friendPost('/api/friends/challenge/respond', { challengeId: btn.dataset.challengeAccept, accept: true });
+    if (j.ok && j.accepted && j.room) {
+      showView('rank');
+      $('tabPvp').click();
+      pvpEnterRoom(j.room);
+      startPvpPoll();
+      sndWin();
+    } else { sndMiss(); alert(j.error || '应战失败'); }
+  } else if (btn.dataset.challengeReject) {
+    await friendPost('/api/friends/challenge/respond', { challengeId: btn.dataset.challengeReject, accept: false });
+    sndFlip();
+    loadFriends();
+  }
+}
+
+function startFriendPoll() {
+  stopFriendPoll();
+  friendPoll = setInterval(() => {
+    if (!$('view-friends').hidden) loadFriends();
+  }, 5000);
+}
+
+/* 视图切换 */
+function showFriendsView(tab) {
+  $('friendsListArea').hidden = tab !== 'list';
+  $('friendsAddArea').hidden = tab !== 'add';
+  $('friendsReqArea').hidden = tab !== 'req';
+  $('tabFriendsList').classList.toggle('active', tab === 'list');
+  $('tabFriendsAdd').classList.toggle('active', tab === 'add');
+  $('tabFriendsReq').classList.toggle('active', tab === 'req');
+}
 
 /* ================= 激励广告（模拟，每日限 3 次） ================= */
 /* 真实环境替换为 AdSense/穿山甲/微信广告 SDK 的 rewarded video，

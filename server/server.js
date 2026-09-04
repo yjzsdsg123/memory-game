@@ -20,6 +20,7 @@ const CONFIG_PATH = path.join(__dirname, 'config.json');
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
 const SCORES_PATH = path.join(DATA_DIR, 'scores.json');
+const FRIENDS_PATH = path.join(DATA_DIR, 'friends.json');
 
 /* 排行榜机器人种子（保证榜单有内容，真人成绩合并后排序） */
 const BOT_SEED = [
@@ -57,6 +58,42 @@ function saveScores(scores) {
   fs.writeFileSync(SCORES_PATH + '.tmp', JSON.stringify(scores, null, 2));
   fs.renameSync(SCORES_PATH + '.tmp', SCORES_PATH);
 }
+
+/* ---------------- 好友关系存储（JSON 文件） ---------------- */
+function loadFriends() {
+  try {
+    return JSON.parse(fs.readFileSync(FRIENDS_PATH, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveFriends(data) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(FRIENDS_PATH + '.tmp', JSON.stringify(data, null, 2));
+  fs.renameSync(FRIENDS_PATH + '.tmp', FRIENDS_PATH);
+}
+
+/* 获取或初始化某用户的好友数据 */
+function getFriendEntry(phone) {
+  const data = loadFriends();
+  if (!data[phone]) {
+    data[phone] = { friends: [], outgoing: [], incoming: [] };
+    saveFriends(data);
+  }
+  return data[phone];
+}
+
+/* 在线状态（内存，不持久化） */
+const lastSeen = new Map();
+function isOnline(phone) {
+  const t = lastSeen.get(phone);
+  return t && Date.now() - t < 30000;
+}
+
+/* 对战邀请（内存，不持久化） */
+const pvpChallenges = new Map();
+let challengeSeq = 0;
 
 /* 合并机器人与真人成绩，按积分降序（同积分按胜场），返回 Top50 */
 function buildLeaderboard() {
@@ -425,6 +462,17 @@ setInterval(() => {
   }
 }, 5000);
 
+/* 定时清理过期的对战邀请（60s 未响应自动过期） */
+setInterval(() => {
+  const now = Date.now();
+  for (const [cid, ch] of pvpChallenges) {
+    if (now - ch.at > 60000 && ch.status === 'pending') {
+      ch.status = 'expired';
+      setTimeout(() => pvpChallenges.delete(cid), 5000);
+    }
+  }
+}, 10000);
+
 function findRoomByToken(token) {
   for (const room of pvpRooms.values()) {
     if (room.tokens.a === token || room.tokens.b === token) return room;
@@ -584,6 +632,7 @@ const server = http.createServer(async (req, res) => {
     const token = u.searchParams.get('token') || req.headers['x-auth-token'];
     const phone = phoneByToken(token);
     if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+    lastSeen.set(phone, Date.now());
     const room = findRoomByToken(token);
     if (room) {
       room.lastPoll[sideOf(room, phone)] = Date.now();
@@ -629,6 +678,241 @@ const server = http.createServer(async (req, res) => {
       return json(res, 500, { ok: false, error: e.message });
     }
   }
+
+  /* ===== 好友系统 ===== */
+
+  /* 获取好友列表 + 待处理请求 + 对战邀请 */
+  if (p === '/api/friends' && req.method === 'GET') {
+    const token = u.searchParams.get('token') || req.headers['x-auth-token'];
+    const phone = phoneByToken(token);
+    if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+    lastSeen.set(phone, Date.now());
+    const entry = getFriendEntry(phone);
+    const scores = loadScores();
+    const resolveUsers = (phones) => phones.map((ph) => {
+      const s = scores[ph] || { points: 0, w: 0, d: 0, l: 0 };
+      return {
+        phone: ph,
+        maskedPhone: ph.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2'),
+        nickname: s.nickname || ph.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2'),
+        points: s.points || 0, w: s.w || 0, d: s.d || 0, l: s.l || 0,
+        online: isOnline(ph),
+      };
+    });
+    /* 查找发给我的待处理对战邀请 */
+    const pendingChallenges = [];
+    for (const [cid, ch] of pvpChallenges) {
+      if (ch.to === phone && ch.status === 'pending') {
+        pendingChallenges.push({ id: cid, from: ch.from, fromNickname: nicknameOf(ch.from), at: ch.at });
+      }
+      /* 检查我发出的挑战是否被接受（返回room给A方） */
+      if (ch.from === phone && ch.status === 'accepted' && ch.room) {
+        const room = pvpRooms.get(ch.room);
+        if (room) {
+          return json(res, 200, {
+            ok: true,
+            friends: resolveUsers(entry.friends),
+            incoming: resolveUsers(entry.incoming),
+            outgoing: resolveUsers(entry.outgoing),
+            challenge: { status: 'accepted', room: roomView(room, phone) },
+          });
+        }
+        pvpChallenges.delete(cid); /* 房间已不存在，清理 */
+      }
+    }
+    return json(res, 200, {
+      ok: true,
+      friends: resolveUsers(entry.friends),
+      incoming: resolveUsers(entry.incoming),
+      outgoing: resolveUsers(entry.outgoing),
+      challenges: pendingChallenges,
+    });
+  }
+
+  /* 按昵称搜索用户 */
+  if (p === '/api/friends/search' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      lastSeen.set(phone, Date.now());
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const q = String(body.nickname || '').trim().slice(0, 20);
+      if (q.length < 1) return json(res, 200, { ok: true, results: [] });
+      const scores = loadScores();
+      const myEntry = getFriendEntry(phone);
+      const results = [];
+      for (const [ph, s] of Object.entries(scores)) {
+        if (ph === phone) continue;
+        const nick = s.nickname;
+        if (!nick) continue;
+        if (!nick.toLowerCase().includes(q.toLowerCase())) continue;
+        const isFriend = myEntry.friends.includes(ph);
+        const reqSent = myEntry.outgoing.includes(ph);
+        results.push({
+          phone: ph,
+          maskedPhone: ph.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2'),
+          nickname: nick,
+          points: s.points || 0, w: s.w || 0, l: s.l || 0,
+          isFriend, reqSent,
+        });
+        if (results.length >= 20) break;
+      }
+      return json(res, 200, { ok: true, results });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 发送好友请求 */
+  if (p === '/api/friends/request' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      lastSeen.set(phone, Date.now());
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const target = String(body.phone || '').trim();
+      if (!validPhone(target)) return json(res, 400, { ok: false, error: '无效的用户' });
+      if (target === phone) return json(res, 400, { ok: false, error: '不能添加自己为好友' });
+      const scores = loadScores();
+      if (!scores[target]) return json(res, 400, { ok: false, error: '该用户尚未注册（对方需先登录并设置昵称）' });
+      const data = loadFriends();
+      if (!data[phone]) data[phone] = { friends: [], outgoing: [], incoming: [] };
+      if (!data[target]) data[target] = { friends: [], outgoing: [], incoming: [] };
+      if (data[phone].friends.includes(target)) return json(res, 400, { ok: false, error: '你们已经是好友了' });
+      if (data[phone].outgoing.includes(target)) return json(res, 400, { ok: false, error: '已发送过请求，请等待对方确认' });
+      if (data[phone].incoming.includes(target)) {
+        /* 对方也向我发了请求 → 直接互加好友 */
+        data[phone].incoming = data[phone].incoming.filter((p) => p !== target);
+        data[target].outgoing = data[target].outgoing.filter((p) => p !== phone);
+        data[phone].friends.push(target);
+        data[target].friends.push(phone);
+        saveFriends(data);
+        return json(res, 200, { ok: true, mutual: true });
+      }
+      data[phone].outgoing.push(target);
+      data[target].incoming.push(phone);
+      saveFriends(data);
+      return json(res, 200, { ok: true });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 同意/拒绝好友请求 */
+  if (p === '/api/friends/respond' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      lastSeen.set(phone, Date.now());
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const fromPhone = String(body.phone || '').trim();
+      const accept = !!body.accept;
+      const data = loadFriends();
+      if (!data[phone]) return json(res, 400, { ok: false, error: '无待处理请求' });
+      const idx = data[phone].incoming.indexOf(fromPhone);
+      if (idx < 0) return json(res, 400, { ok: false, error: '请求不存在或已处理' });
+      data[phone].incoming.splice(idx, 1);
+      if (!data[fromPhone]) data[fromPhone] = { friends: [], outgoing: [], incoming: [] };
+      const oi = data[fromPhone].outgoing.indexOf(phone);
+      if (oi >= 0) data[fromPhone].outgoing.splice(oi, 1);
+      if (accept) {
+        if (!data[phone].friends.includes(fromPhone)) data[phone].friends.push(fromPhone);
+        if (!data[fromPhone].friends.includes(phone)) data[fromPhone].friends.push(phone);
+      }
+      saveFriends(data);
+      return json(res, 200, { ok: true, accepted: accept });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 删除好友 */
+  if (p === '/api/friends/remove' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      lastSeen.set(phone, Date.now());
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const target = String(body.phone || '').trim();
+      const data = loadFriends();
+      if (!data[phone]) return json(res, 200, { ok: true });
+      data[phone].friends = data[phone].friends.filter((p) => p !== target);
+      if (data[target]) data[target].friends = data[target].friends.filter((p) => p !== phone);
+      saveFriends(data);
+      return json(res, 200, { ok: true });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 挑战好友对战 */
+  if (p === '/api/friends/challenge' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      lastSeen.set(phone, Date.now());
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const target = String(body.phone || '').trim();
+      if (!validPhone(target)) return json(res, 400, { ok: false, error: '无效的用户' });
+      if (target === phone) return json(res, 400, { ok: false, error: '不能挑战自己' });
+      const data = loadFriends();
+      if (!data[phone] || !data[phone].friends.includes(target))
+        return json(res, 400, { ok: false, error: '对方还不是你的好友' });
+      /* 检查是否已有 pending 挑战 */
+      for (const [cid, ch] of pvpChallenges) {
+        if (ch.from === phone && ch.to === target && ch.status === 'pending')
+          return json(res, 400, { ok: false, error: '已发出挑战，请等待对方响应' });
+      }
+      const cid = 'C' + (++challengeSeq);
+      pvpChallenges.set(cid, { from: phone, to: target, status: 'pending', room: null, at: Date.now() });
+      return json(res, 200, { ok: true, challengeId: cid });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 接受/拒绝对战邀请 → 接受时创建 PvP 房间 */
+  if (p === '/api/friends/challenge/respond' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      lastSeen.set(phone, Date.now());
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const cid = String(body.challengeId || '');
+      const accept = !!body.accept;
+      const ch = pvpChallenges.get(cid);
+      if (!ch) return json(res, 400, { ok: false, error: '邀请不存在或已过期' });
+      if (ch.to !== phone) return json(res, 403, { ok: false, error: '这不是发给你的邀请' });
+      if (ch.status !== 'pending') return json(res, 400, { ok: false, error: '邀请已处理' });
+      if (!accept) {
+        ch.status = 'rejected';
+        setTimeout(() => pvpChallenges.delete(cid), 5000);
+        return json(res, 200, { ok: true, accepted: false });
+      }
+      /* 接受 → 创建 PvP 房间 */
+      const users = loadUsers();
+      const aToken = users[ch.from] && users[ch.from].token;
+      const bToken = users[phone] && users[phone].token;
+      if (!aToken || !bToken) return json(res, 400, { ok: false, error: '用户信息缺失，请双方重新登录' });
+      const aEntry = { token: aToken, phone: ch.from };
+      const bEntry = { token: bToken, phone: phone };
+      const room = createRoom(aEntry, bEntry);
+      ch.status = 'accepted';
+      ch.room = room.id;
+      setTimeout(() => pvpChallenges.delete(cid), 120000);
+      return json(res, 200, { ok: true, accepted: true, room: roomView(room, phone) });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 定时清理过期的对战邀请已在 PvP 模块中注册 */
 
   json(res, 404, { ok: false, error: 'not found' });
 });
