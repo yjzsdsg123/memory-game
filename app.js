@@ -2291,41 +2291,41 @@ function showFriendsView(tab) {
 }
 
 /* ================= 大世界 · 记忆小镇 ================= */
-const WORLD_W = 1000;
-/* 3D 视角：地面绕 X 轴倾倒角度（度），立牌用反角立起 */
+const WORLD_W = 1500;
+/* 3D 视角：地面绕 X 轴倾倒角度（度），立牌用反角立起（旧 CSS 模式，3D 模式已不用） */
 const WORLD_TILT = 52;
-const WORLD_H = 680;
+const WORLD_H = 1100;
 const WORLD_AVATARS = ['🧑‍🎨', '🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '🥷', '🤖', '🐱', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯', '🐧'];
 
-/* 建筑（逻辑坐标 1000×680，view = 进入的功能视图） */
+/* 建筑（逻辑坐标 1500×1100，view = 进入的功能视图） */
 const WORLD_BUILDINGS = [
-  { id: 'academy', emoji: '🎓', name: '翻牌学院',   x: 60,  y: 80,  w: 140, h: 104, view: 'academy' },
-  { id: 'digit',   emoji: '🔢', name: '数字塔',     x: 300, y: 60,  w: 140, h: 104, view: 'digit' },
-  { id: 'simon',   emoji: '🎨', name: '彩灯广场',   x: 540, y: 80,  w: 140, h: 104, view: 'simon' },
-  { id: 'board',   emoji: '📊', name: '排行榜碑',   x: 790, y: 70,  w: 140, h: 104, view: 'board' },
-  { id: 'rank',    emoji: '🏆', name: '排位竞技场', x: 80,  y: 330, w: 160, h: 118, view: 'rank' },
-  { id: 'shop',    emoji: '🎁', name: '礼品商店',   x: 420, y: 350, w: 140, h: 104, view: 'shop' },
-  { id: 'friends', emoji: '👥', name: '好友之家',   x: 720, y: 340, w: 140, h: 104, view: 'friends' },
+  { id: 'academy', emoji: '🎓', name: '翻牌学院',   x: 150,  y: 130, w: 150, h: 110, view: 'academy' },
+  { id: 'digit',   emoji: '🔢', name: '数字塔',     x: 520,  y: 120, w: 150, h: 110, view: 'digit' },
+  { id: 'simon',   emoji: '🎨', name: '彩灯广场',   x: 890,  y: 130, w: 150, h: 110, view: 'simon' },
+  { id: 'board',   emoji: '📊', name: '排行榜碑',   x: 1260, y: 120, w: 150, h: 110, view: 'board' },
+  { id: 'rank',    emoji: '🏆', name: '排位竞技场', x: 170,  y: 560, w: 170, h: 125, view: 'rank' },
+  { id: 'shop',    emoji: '🎁', name: '礼品商店',   x: 480,  y: 570, w: 150, h: 110, view: 'shop' },
+  { id: 'friends', emoji: '👥', name: '好友之家',   x: 1150, y: 560, w: 150, h: 110, view: 'friends' },
 ];
 
-/* 碰撞体：建筑外扩一圈 + 中央喷泉 */
+/* 碰撞体：建筑外扩一圈 + 环岛喷泉（交叉口 750,850） */
 const WORLD_SOLIDS = WORLD_BUILDINGS
   .map((b) => ({ x: b.x - 16, y: b.y - 8, w: b.w + 32, h: b.h + 26 }))
-  .concat([{ x: 474, y: 486, w: 52, h: 48 }]);
+  .concat([{ x: 720, y: 820, w: 60, h: 60 }]);
 
 const WORLD_NPCS = [
   {
-    id: 'guide', emoji: '🧙‍♀️', name: '向导梅梅', x: 392, y: 585,
+    id: 'guide', emoji: '🧙‍♀️', name: '向导梅梅', x: 640, y: 950,
     text: '欢迎来到记忆小镇！用方向键（手机拖左下摇杆）走动，走近建筑点「进入」就能玩。镇里还有好多镇民在溜达，点他们可以聊天哦～',
     btn: { label: '知道啦', act: 'close' },
   },
   {
-    id: 'judge', emoji: '⚖️', name: '裁判阿正', x: 285, y: 448,
+    id: 'judge', emoji: '⚖️', name: '裁判阿正', x: 360, y: 760,
     text: '排位竞技场今天开门！赢一局 +30 积分、+50 金币，连胜还能升段位。要去和对手过过招吗？',
     btn: { label: '🏆 去排位赛', act: 'view', view: 'rank' },
   },
   {
-    id: 'keeper', emoji: '🛒', name: '商店老板', x: 622, y: 452,
+    id: 'keeper', emoji: '🛒', name: '商店老板', x: 620, y: 760,
     text: '新到了冻结卡和透视卡，排位赛里可好使了！看广告还能免费领提示，不来逛逛吗？',
     btn: { label: '🎁 逛商店', act: 'view', view: 'shop' },
   },
@@ -2352,11 +2352,20 @@ const BOT_LINES = [
 ];
 
 const WORLD_DECOS = [
-  { t: '🌳', x: 24, y: 30 }, { t: '🌳', x: 945, y: 40 }, { t: '🌲', x: 18, y: 300 },
-  { t: '🌲', x: 950, y: 290 }, { t: '🌻', x: 250, y: 220 }, { t: '🌻', x: 700, y: 225 },
-  { t: '🪨', x: 340, y: 250 }, { t: '🪨', x: 640, y: 265 }, { t: '⛲', x: 500, y: 512, fx: true },
-  { t: '🪧', x: 330, y: 628 }, { t: '🌷', x: 150, y: 610 }, { t: '🌷', x: 860, y: 610 },
-  { t: '🦋', x: 610, y: 180, fly: true }, { t: '🐦', x: 200, y: 150, fly: true },
+  /* 大树（3D 真模型）：四角 + 建筑间隙 + 路侧 */
+  { t: '🌳', x: 60, y: 120 }, { t: '🌳', x: 1440, y: 120 }, { t: '🌳', x: 420, y: 90 },
+  { t: '🌳', x: 1080, y: 90 }, { t: '🌳', x: 60, y: 830 }, { t: '🌳', x: 1430, y: 860 },
+  { t: '🌲', x: 770, y: 60 }, { t: '🌲', x: 370, y: 480 }, { t: '🌲', x: 1070, y: 470 },
+  { t: '🌲', x: 260, y: 960 }, { t: '🌲', x: 1250, y: 970 },
+  /* 花卉石头 */
+  { t: '🌻', x: 380, y: 300 }, { t: '🌻', x: 1100, y: 300 }, { t: '🌻', x: 520, y: 830 }, { t: '🌻', x: 980, y: 830 },
+  { t: '🪨', x: 470, y: 440 }, { t: '🪨', x: 1020, y: 440 }, { t: '🪨', x: 130, y: 1010 },
+  { t: '🌷', x: 180, y: 900 }, { t: '🌷', x: 1320, y: 900 }, { t: '🌷', x: 880, y: 900 }, { t: '🌷', x: 700, y: 1040 },
+  /* 中央环岛喷泉（横路 y=850 与竖路 x=750 交叉口）+ 出生点路牌 */
+  { t: '⛲', x: 750, y: 850, fx: true },
+  { t: '🪧', x: 600, y: 920 },
+  /* 飞舞 */
+  { t: '🦋', x: 950, y: 380, fly: true }, { t: '🐦', x: 350, y: 200, fly: true },
 ];
 
 /* ---- 角色形象（localStorage） ---- */
@@ -2377,7 +2386,7 @@ let worldReturn = false; /* 从世界进入游戏后，返回键回世界而非�
 const world = {
   running: false,
   built: false,
-  me: { x: 500, y: 615, el: null },
+  me: { x: 750, y: 1010, el: null },
   keys: { up: false, down: false, left: false, right: false },
   joy: { x: 0, y: 0 },
   bots: [],
@@ -2446,7 +2455,7 @@ function buildWorld() {
   }
   /* 机器人镇民 */
   world.bots = WORLD_BOTS.map((d, i) => {
-    const b = { id: 'bot' + i, name: d.name, avatar: d.avatar, points: d.points, x: 500, y: 600, tx: 500, ty: 600, wait: 0, el: null };
+    const b = { id: 'bot' + i, name: d.name, avatar: d.avatar, points: d.points, x: 750, y: 980, tx: 750, ty: 980, wait: 0, el: null };
     b.el = makeCharEl('char-bot', d.avatar, d.name);
     b.el.dataset.bot = b.id;
     $('worldChars').appendChild(b.el);
@@ -2588,7 +2597,7 @@ async function sendWorldChallenge(phone, btn) {
 function pickBotTarget(b, first) {
   for (let tries = 0; tries < 24; tries++) {
     const x = 70 + Math.random() * (WORLD_W - 140);
-    const y = 150 + Math.random() * (WORLD_H - 230);
+    const y = 160 + Math.random() * (WORLD_H - 250);
     if (!hitsSolid(x, y)) { b.tx = x; b.ty = y; break; }
   }
   b.wait = first ? 0 : 40 + Math.random() * 200;
@@ -2643,7 +2652,7 @@ function syncRemotes(players) {
     );
     el.dataset.pid = p.id;
     layer.appendChild(el);
-    placeChar(el, wcClamp(p.x, 24, WORLD_W - 24), wcClamp(p.y, 90, WORLD_H - 20));
+    placeChar(el, wcClamp(p.x, 30, WORLD_W - 30), wcClamp(p.y, 110, WORLD_H - 30));
   }
 }
 
@@ -2703,8 +2712,8 @@ function worldTick() {
   const len = Math.hypot(dx, dy);
   if (len > 0.15) {
     if (len > 1) { dx /= len; dy /= len; }
-    const nx = wcClamp(world.me.x + dx * sp, 26, WORLD_W - 26);
-    const ny = wcClamp(world.me.y + dy * sp, 90, WORLD_H - 18);
+    const nx = wcClamp(world.me.x + dx * sp, 30, WORLD_W - 30);
+    const ny = wcClamp(world.me.y + dy * sp, 110, WORLD_H - 30);
     if (!hitsSolid(nx, world.me.y)) world.me.x = nx;
     if (!hitsSolid(world.me.x, ny)) world.me.y = ny;
     placeChar(world.me.el, world.me.x, world.me.y);
@@ -3278,6 +3287,171 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+/* ---- 天空渐变背景 ---- */
+function makeSkyTexture(dark) {
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 512;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 512);
+  if (dark) { g.addColorStop(0, '#0a0f2e'); g.addColorStop(0.7, '#1b2550'); g.addColorStop(1, '#2c3a6e'); }
+  else { g.addColorStop(0, '#2f9df0'); g.addColorStop(0.55, '#7cc6f8'); g.addColorStop(1, '#d9f1ff'); }
+  x.fillStyle = g; x.fillRect(0, 0, 4, 512);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ---- 草地地面纹理（程序生成：草色 + 噪点 + 小花） ---- */
+function makeGrassTexture(dark) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = dark ? '#244a29' : '#86cf72';
+  x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 1100; i++) {
+    const gx = Math.random() * 256, gy = Math.random() * 256;
+    x.fillStyle = Math.random() > 0.5
+      ? (dark ? 'rgba(52,98,58,0.9)' : 'rgba(110,196,92,0.9)')
+      : (dark ? 'rgba(28,60,34,0.9)' : 'rgba(150,224,124,0.9)');
+    x.fillRect(gx, gy, 2, 3 + Math.random() * 3);
+  }
+  const flowers = ['#ffffff', '#ffe066', '#ff9ec4', '#c5b3ff'];
+  for (let i = 0; i < 16; i++) {
+    x.fillStyle = flowers[i % flowers.length];
+    x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, 1.8, 0, 7); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(16, 12);
+  t.anisotropy = 8;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ---- 土路纹理（横竖路径） ---- */
+function makePathTexture(dark) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = dark ? '#3a3426' : '#e6d3a3';
+  x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 380; i++) {
+    x.fillStyle = Math.random() > 0.5
+      ? (dark ? 'rgba(255,255,255,0.05)' : 'rgba(146,110,60,0.18)')
+      : (dark ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.35)');
+    const r = 1 + Math.random() * 2.4;
+    x.beginPath(); x.arc(Math.random() * 128, Math.random() * 128, r, 0, 7); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(24, 4);
+  t.anisotropy = 4;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ---- 建筑正面纹理（墙 + 屋檐阴影 + 门 + 窗户 + 招牌底） ---- */
+function makeWallTexture(b, dark) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 512;
+  const x = c.getContext('2d');
+  /* 墙 */
+  x.fillStyle = dark ? '#332c58' : '#f7f3ff';
+  x.fillRect(0, 0, 512, 512);
+  /* 屋檐下阴影条 */
+  x.fillStyle = dark ? 'rgba(0,0,0,0.35)' : 'rgba(111,75,204,0.15)';
+  x.fillRect(0, 0, 512, 64);
+  /* 墙脚线 */
+  x.fillStyle = dark ? 'rgba(0,0,0,0.3)' : 'rgba(111,75,204,0.10)';
+  x.fillRect(0, 452, 512, 60);
+  /* 窗户：2×2 共 4 扇（蓝玻璃 + 白框 + 十字格） */
+  const drawWin = (wx, wy) => {
+    x.fillStyle = dark ? '#26304d' : '#bfe6ff';
+    roundRect(x, wx, wy, 96, 96, 10); x.fill();
+    x.fillStyle = dark ? '#4a5d8f' : '#8fcdf5';
+    roundRect(x, wx + 8, wy + 8, 80, 80, 6); x.fill();
+    x.strokeStyle = dark ? '#93a5d6' : '#ffffff';
+    x.lineWidth = 6;
+    x.beginPath(); x.moveTo(wx + 48, wy + 10); x.lineTo(wx + 48, wy + 86);
+    x.moveTo(wx + 10, wy + 48); x.lineTo(wx + 86, wy + 48); x.stroke();
+  };
+  drawWin(60, 130); drawWin(356, 130);
+  drawWin(60, 260); drawWin(356, 260);
+  /* 门：中央拱门（深棕 + 把手 + 台阶） */
+  x.fillStyle = dark ? '#5b4a6e' : '#d9cdb8';
+  roundRect(x, 196, 300, 120, 16, 6); x.fill(); /* 台阶 */
+  x.fillStyle = dark ? '#6d4a2f' : '#8b5a2b';
+  x.beginPath();
+  x.moveTo(206, 452); x.lineTo(206, 360);
+  x.arc(256, 360, 50, Math.PI, 0);
+  x.lineTo(306, 452);
+  x.closePath(); x.fill();
+  x.strokeStyle = dark ? '#3a2718' : '#6e431f';
+  x.lineWidth = 6; x.stroke();
+  x.fillStyle = '#ffd97a';
+  x.beginPath(); x.arc(290, 405, 5, 0, 7); x.fill();
+  /* 门牌招牌（紫色底，名字由 3D 标签浮于其上，这里画个装饰横幅） */
+  x.fillStyle = dark ? '#4c3d99' : '#6f4bcc';
+  roundRect(x, 136, 76, 240, 52, 12); x.fill();
+  x.fillStyle = '#ffd97a';
+  x.font = '700 34px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(b.emoji, 256, 103);
+  const t = new THREE.CanvasTexture(c);
+  t.anisotropy = 8;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ---- 3D 树木（真模型：树干 + 树冠） ---- */
+function makeTree(kind, dark) {
+  const g = new THREE.Group();
+  const trunkMat = new THREE.MeshStandardMaterial({ color: dark ? 0x6b4423 : 0x8b5a2b, roughness: 1 });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.22, 1.4, 7), trunkMat);
+  trunk.position.y = 0.7;
+  trunk.castShadow = true;
+  g.add(trunk);
+  if (kind === '🌲') {
+    const mat = new THREE.MeshStandardMaterial({ color: dark ? 0x1c4a2e : 0x2e8b46, roughness: 0.9 });
+    for (let i = 0; i < 3; i++) {
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.15 - i * 0.24, 1.35, 9), mat);
+      cone.position.y = 1.55 + i * 0.72;
+      cone.castShadow = true;
+      g.add(cone);
+    }
+  } else {
+    const mat = new THREE.MeshStandardMaterial({ color: dark ? 0x285f33 : 0x54b45f, roughness: 0.9 });
+    const s1 = new THREE.Mesh(new THREE.SphereGeometry(1.05, 10, 8), mat);
+    s1.position.y = 2.15; s1.scale.set(1.05, 0.95, 1.05); s1.castShadow = true; g.add(s1);
+    const s2 = new THREE.Mesh(new THREE.SphereGeometry(0.72, 10, 8), mat);
+    s2.position.set(0.5, 1.8, 0.25); s2.castShadow = true; g.add(s2);
+    const s3 = new THREE.Mesh(new THREE.SphereGeometry(0.66, 10, 8), mat);
+    s3.position.set(-0.45, 1.85, -0.2); s3.castShadow = true; g.add(s3);
+  }
+  return g;
+}
+
+/* ---- 3D 喷泉（石盘 + 水面 + 中央水柱） ---- */
+function makeFountain(dark) {
+  const g = new THREE.Group();
+  const stoneMat = new THREE.MeshStandardMaterial({ color: dark ? 0x8a8aa0 : 0xcfc8d8, roughness: 0.85 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.25, 0.45, 24), stoneMat);
+  base.position.y = 0.22; base.castShadow = true; base.receiveShadow = true; g.add(base);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.05, 0.18, 24), stoneMat);
+  rim.position.y = 0.5; g.add(rim);
+  const waterMat = new THREE.MeshStandardMaterial({
+    color: dark ? 0x2b6f9e : 0x7cc6f0, roughness: 0.2, metalness: 0.1,
+    transparent: true, opacity: 0.85,
+  });
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.12, 24), waterMat);
+  water.position.y = 0.5; g.add(water);
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.9, 12), stoneMat);
+  pillar.position.y = 0.95; pillar.castShadow = true; g.add(pillar);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 0.22, 12), stoneMat);
+  top.position.y = 1.5; top.castShadow = true; g.add(top);
+  return g;
+}
+
 /* ---- 初始化入口 ---- */
 function initFirstPerson() {
   if (typeof THREE === 'undefined') {
@@ -3289,23 +3463,23 @@ function initFirstPerson() {
   const canvas = $('fpCanvas');
   const S = to3(0, 0, 0).S;
 
-  /* 场景+背景雾 */
+  /* 场景+天空渐变背景+雾（场景扩大到 120×88m，fog 同步拉远） */
   fp.scene = new THREE.Scene();
   const dark = document.body.dataset.theme === 'dark';
-  fp.scene.background = dark ? new THREE.Color('#141a33') : new THREE.Color('#87ceeb');
+  fp.scene.background = makeSkyTexture(dark);
   fp.scene.fog = new THREE.Fog(
-    dark ? '#141a33' : '#87ceeb',
-    20, 80
+    dark ? 0x1a2347 : 0xbfdff5,
+    35, 140
   );
 
   /* 相机（挂在 yawObj→pitchObj 层级下，相机本身 local position=0；yawObj 跟随玩家眼睛 3D 坐标） */
   const rect = wrap.getBoundingClientRect();
-  fp.camera = new THREE.PerspectiveCamera(70, rect.width / rect.height, 0.1, 500);
+  fp.camera = new THREE.PerspectiveCamera(72, rect.width / rect.height, 0.1, 500);
   fp.camera.position.set(0, 0, 0);
 
   /* Renderer */
   fp.renderer = new THREE.WebGLRenderer({
-    canvas, antialias: true, alpha: true, powerPreference: 'high-performance',
+    canvas, antialias: true, alpha: false, powerPreference: 'high-performance',
   });
   fp.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   fp.renderer.setSize(rect.width, rect.height, false);
@@ -3313,20 +3487,23 @@ function initFirstPerson() {
   fp.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   fp.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  /* 灯光 */
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x4d6e3a, dark ? 0.55 : 0.85);
+  /* 灯光（阴影相机范围随大地图扩大到 ±80m） */
+  const hemi = new THREE.HemisphereLight(dark ? 0x9db4ff : 0xdfeeff, dark ? 0x24351f : 0x6fa055, dark ? 0.7 : 0.95);
   fp.scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, dark ? 0.7 : 1.1);
-  dir.position.set(15, 40, 15);
+  const dir = new THREE.DirectionalLight(0xfff4d6, dark ? 0.75 : 1.15);
+  dir.position.set(35, 70, 25);
   dir.castShadow = true;
   dir.shadow.mapSize.set(2048, 2048);
+  dir.shadow.bias = -0.0004;
+  dir.shadow.normalBias = 0.03;
   dir.shadow.camera.near = 1;
-  dir.shadow.camera.far = 100;
-  dir.shadow.camera.left = -40;
-  dir.shadow.camera.right = 40;
-  dir.shadow.camera.top = 40;
-  dir.shadow.camera.bottom = -40;
+  dir.shadow.camera.far = 200;
+  dir.shadow.camera.left = -80;
+  dir.shadow.camera.right = 80;
+  dir.shadow.camera.top = 80;
+  dir.shadow.camera.bottom = -80;
   fp.scene.add(dir);
+  fp.sunLight = dir;
 
   /* ---- 构建世界 ---- */
   buildFpWorld(S, dark);
@@ -3348,9 +3525,10 @@ function initFirstPerson() {
 
   fp.onMouseMove = (e) => {
     if (!fp.locked) return;
-    /* 灵敏度：2000 像素 ≈ 2π 弧度 → 每像素 0.00314 弧度 */
+    /* 灵敏度：2000 像素 ≈ 2π 弧度 → 每像素 0.0022 弧度。
+       to3 北=+z 为镜像映射，水平方向用 += 才能"鼠标右移→视角向东右转" */
     const sens = 0.0022;
-    fp.yaw   -= e.movementX * sens;
+    fp.yaw   += e.movementX * sens;
     fp.pitch -= e.movementY * sens;
     /* Pitch 钳制 ±85°，避免翻到后面 */
     const lim = Math.PI * 0.48;
@@ -3393,10 +3571,10 @@ function initFirstPerson() {
 }
 
 function buildFpWorld(S, dark) {
-  /* 地面：WORLD_W × WORLD_H = 80 × 54.4 米 */
+  /* 地面：1500×1100 = 120×88 米，草地纹理 */
   const groundGeo = new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S, 1, 1);
   const groundMat = new THREE.MeshStandardMaterial({
-    color: dark ? 0x2a5230 : 0x7fc377,
+    map: makeGrassTexture(dark),
     roughness: 0.95, metalness: 0,
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -3404,64 +3582,71 @@ function buildFpWorld(S, dark) {
   ground.receiveShadow = true;
   fp.scene.add(ground);
 
-  /* 路径：横竖两条路 */
+  /* 路径：横竖两条土路（横路 y=850、竖路 x=750） */
   const pathMat = new THREE.MeshStandardMaterial({
-    color: dark ? 0x3b3525 : 0xe2d09e, roughness: 0.8,
+    map: makePathTexture(dark), roughness: 0.9,
   });
   const pathH = new THREE.Mesh(
-    new THREE.BoxGeometry(WORLD_W * S, 0.05, 38 * S),
+    new THREE.BoxGeometry(WORLD_W * S, 0.06, 42 * S),
     pathMat
   );
-  pathH.position.set(0, 0.025, (WORLD_H / 2 - 560) * S);
+  pathH.position.set(0, 0.03, (WORLD_H / 2 - 850) * S);
   pathH.receiveShadow = true;
   fp.scene.add(pathH);
   const pathV = new THREE.Mesh(
-    new THREE.BoxGeometry(38 * S, 0.05, WORLD_H * S),
+    new THREE.BoxGeometry(42 * S, 0.06, WORLD_H * S),
     pathMat
   );
-  pathV.position.set((500 - WORLD_W / 2) * S, 0.025, 0);
+  pathV.position.set((750 - WORLD_W / 2) * S, 0.03, 0);
   pathV.receiveShadow = true;
   fp.scene.add(pathV);
 
-  /* 建筑（Box 主体 + 四坡屋顶） */
-  const wallMat = new THREE.MeshStandardMaterial({
-    color: dark ? 0x2a2545 : 0xf4f1ff, roughness: 0.85,
-  });
+  /* 建筑（正面纹理墙体 Box + 四坡屋顶 + 大门牌名） */
   const roofMat = new THREE.MeshStandardMaterial({
     color: dark ? 0x43388a : 0x6f4bcc, roughness: 0.7,
   });
-  const baseY = (obj) => obj.userData.centerY = 0;
+  const sideWallMat = new THREE.MeshStandardMaterial({
+    color: dark ? 0x2e2850 : 0xe9e3fb, roughness: 0.9,
+  });
   for (const b of WORLD_BUILDINGS) {
     const w = b.w * S, d = b.h * S, h = 110 * S; /* 建筑高度=8.8m */
     const center = to3(b.x + b.w / 2, b.y + b.h / 2);
     const group = new THREE.Group();
-    /* 主体（加厚度向后） */
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d * 1.2), wallMat);
+    /* 主体：正面(+z)用门窗纹理，其余面素色。Box 材质序 [+x,-x,+y,-y,+z,-z] */
+    const frontMat = new THREE.MeshStandardMaterial({
+      map: makeWallTexture(b, dark), roughness: 0.85, metalness: 0,
+    });
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d * 1.2),
+      [sideWallMat, sideWallMat, sideWallMat, sideWallMat, frontMat, sideWallMat]
+    );
     body.position.set(0, h / 2, -d * 0.1);
     body.castShadow = true;
     body.receiveShadow = true;
     group.add(body);
     /* 屋顶：四棱锥 */
     const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(Math.max(w, d * 1.2) * 0.9, h * 0.5, 4),
+      new THREE.ConeGeometry(Math.max(w, d * 1.2) * 0.95, h * 0.5, 4),
       roofMat
     );
     roof.position.set(0, h + h * 0.25, -d * 0.1);
     roof.rotation.y = Math.PI / 4;
     roof.castShadow = true;
     group.add(roof);
-    /* 正面 emoji 标签（Sprite，贴正面上方） */
+    /* 正面 emoji（门脸上方） */
     const emSp = makeEmojiSprite(b.emoji, { size: 58 });
-    emSp.scale.set(0.8, 0.8, 1);
-    emSp.position.set(0, h * 0.72, d * 0.6);
+    emSp.scale.set(0.9, 0.9, 1);
+    emSp.position.set(0, h * 0.82, d * 0.62);
     group.add(emSp);
-    /* 下方名字（小标签） */
-    const nameSp = makeEmojiSprite(b.name, { bubble: true, size: 26,
-      bubble: { bg: dark ? 'rgba(32,29,51,0.95)' : 'rgba(255,255,255,0.95)',
-                 border: dark ? 'rgba(139,92,246,0.5)' : 'rgba(0,0,0,0.1)',
-                 color: dark ? '#ece9f8' : '#23203a' } });
-    nameSp.scale.set(2.0, 0.6, 1);
-    nameSp.position.set(0, h * 0.22, d * 0.62);
+    /* 大门牌名：紫底白字大标签，depthTest=false 保证任何角度清晰可读 */
+    const nameSp = makeEmojiSprite(b.name, { bubble: true, size: 44,
+      bubble: { bg: dark ? 'rgba(76,61,153,0.98)' : 'rgba(111,75,204,0.98)',
+                 border: 'rgba(255,217,122,0.9)',
+                 color: '#ffffff' } });
+    nameSp.material.depthTest = false;
+    nameSp.renderOrder = 999;
+    nameSp.scale.set(4.6, 0.95, 1);
+    nameSp.position.set(0, h * 0.52, d * 0.68);
     group.add(nameSp);
     group.position.set(center.x, 0, center.z);
     group.userData.building = b;
@@ -3470,34 +3655,46 @@ function buildFpWorld(S, dark) {
     fp.buildingMeshes.push(body);
   }
 
-  /* 装饰 Sprite（🌳🌲🌻🪨⛲🪧🌷🦋🐦） */
+  /* 装饰：🌳🌲 用真 3D 模型；⛲ 用 3D 喷泉水池；其余 emoji Sprite */
   for (const d of WORLD_DECOS) {
     const p = to3(d.x, d.y);
-    const isEmoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(d.t);
-    const size = d.fly ? 0.6 : (d.fx ? 1.0 : (d.t === '🌳' || d.t === '🌲' ? 0.9 : 0.65));
+    if (d.t === '🌳' || d.t === '🌲') {
+      const tree = makeTree(d.t, dark);
+      tree.position.set(p.x, 0, p.z);
+      tree.scale.setScalar(1.15);
+      fp.scene.add(tree);
+      fp.decoSprites.push(tree); /* Group：随场景 traverse 统一释放 */
+      continue;
+    }
+    if (d.fx) {
+      const foun = makeFountain(dark);
+      foun.position.set(p.x, 0, p.z);
+      fp.scene.add(foun);
+      fp.decoSprites.push(foun);
+    }
+    const size = d.fly ? 0.7 : (d.fx ? 1.1 : 0.7);
     const sp = makeEmojiSprite(d.t, { size: 42 });
     sp.scale.set(size, size, 1);
     if (d.fx) {
-      sp.position.set(p.x, 1.3, p.z);
+      sp.position.set(p.x, 2.0, p.z);
     } else if (d.fly) {
-      sp.position.set(p.x, 2.4, p.z);
+      sp.position.set(p.x, 2.6, p.z);
     } else {
       sp.position.set(p.x, size * 0.55, p.z);
     }
-    if (d.fly) sp.userData.fly = { t0: performance.now(), p0: { x: p.x, y: 2.4, z: p.z } };
-    if (d.fx)  sp.userData.fx = { t0: performance.now() };
+    if (d.fly) sp.userData.fly = { t0: performance.now(), p0: { x: p.x, y: 2.6, z: p.z } };
     fp.decoSprites.push(sp);
     fp.scene.add(sp);
   }
 
-  /* 喷泉粒子 */
-  const p = to3(500, 512);
-  for (let i = 0; i < 8; i++) {
-    const geo = new THREE.SphereGeometry(0.06, 6, 6);
+  /* 喷泉粒子（中央喷泉 750,640） */
+  const fp0 = to3(750, 850);
+  for (let i = 0; i < 10; i++) {
+    const geo = new THREE.SphereGeometry(0.07, 6, 6);
     const mat = new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.9 });
     const s = new THREE.Mesh(geo, mat);
-    s.position.set(p.x, 1.5, p.z);
-    s.userData.fountain = { t0: performance.now() + Math.random() * 1.3e3, ox: (Math.random() - 0.5) * 0.15 };
+    s.position.set(fp0.x, 1.6, fp0.z);
+    s.userData.fountain = { t0: performance.now() + Math.random() * 1.3e3, ox: (Math.random() - 0.5) * 0.3, oz: (Math.random() - 0.5) * 0.3 };
     fp.decoSprites.push(s);
     fp.scene.add(s);
   }
@@ -3600,6 +3797,8 @@ function syncFpCharsEveryFrame() {
     const t = ((performance.now() - f.t0) / 1000) % 1.3;
     const h = -1.8 * t * t + 2.34 * t;           /* 抛物线 0→最高点 0.65→0 */
     o.position.y = 1.55 + h;
+    o.position.x = f.bx + f.ox * t;
+    o.position.z = f.bz + f.oz * t;
     o.material.opacity = t < 1.1 ? 0.95 : 0.95 * (1 - (t - 1.1) / 0.2);
   }
   /* 玩家眼睛（yawObj 容器）跟随 world.me 2D 坐标 —— 单一真相写入 */
@@ -3633,8 +3832,8 @@ function fpCollides(nx, nz) {
     if (xb > sxa && xa < sxb && zb > sza && za < szb) return true;
   }
   /* 世界边界钳制（在调用方也会再做一次，这里保底） */
-  if (nx < 26 || nx > WORLD_W - 26) return true;
-  if (nz < 90 || nz > WORLD_H - 18) return true;
+  if (nx < 30 || nx > WORLD_W - 30) return true;
+  if (nz < 110 || nz > WORLD_H - 30) return true;
   return false;
 }
 
@@ -3653,7 +3852,7 @@ function moveFp(dt) {
   dir.y = 0;
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1);
   dir.normalize();
-  const right = new THREE.Vector3(-dir.z, 0, dir.x);
+  const right = new THREE.Vector3(dir.z, 0, -dir.x);
 
   let wx3 = 0, wz3 = 0;
   if (fpKeys.fwd)   { wx3 += dir.x; wz3 += dir.z; }
@@ -3663,14 +3862,13 @@ function moveFp(dt) {
   const len = Math.hypot(wx3, wz3);
   if (len <= 0) return;
   wx3 /= len; wz3 /= len;
-  /* pos_3d = (wx3, wz3) * speed * dt；world 坐标差 = 3D 差 / S */
-  const dwx = (wx3 * realSpeed * dt) / S;
-  const dwz = (wz3 * realSpeed * dt) / S;
-  /* world 北向 = -3D z 向 */
-  const dwy = -dwz;
+  /* 位移直接在 world 坐标系算（各向同比例 S，方向向量通用；z 轴与 world y 反号）。
+     realSpeed=55 world 单位/秒 ≈ 4.4 m/s 步行速度（注意不要再除 S，否则变成 55m/s） */
+  const dwx = wx3 * realSpeed * dt;
+  const dwy = -wz3 * realSpeed * dt;
   /* 分轴 AABB：和 worldTick 完全一致 */
-  const nx = wcClamp(world.me.x + dwx, 26, WORLD_W - 26);
-  const ny = wcClamp(world.me.y + dwy, 90, WORLD_H - 18);
+  const nx = wcClamp(world.me.x + dwx, 30, WORLD_W - 30);
+  const ny = wcClamp(world.me.y + dwy, 110, WORLD_H - 30);
   if (!fpCollides(nx, world.me.y)) world.me.x = nx;
   if (!fpCollides(world.me.x, ny)) world.me.y = ny;
 }
@@ -3771,6 +3969,7 @@ function disposeFirstPerson() {
   $('fpLockMsg').hidden = true;
   $('fpHint').hidden = true;
   if (fp.scene) {
+    if (fp.scene.background && fp.scene.background.dispose) fp.scene.background.dispose();
     fp.scene.traverse(obj => {
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {

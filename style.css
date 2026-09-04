@@ -2000,8 +2000,8 @@ body[data-cardback='gold'] .face.back {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 1000px;
-  height: 680px;
+  width: 1500px;
+  height: 1100px;
   transform-origin: center center;
   transform-style: preserve-3d;
   opacity: 0;
