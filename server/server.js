@@ -259,6 +259,179 @@ function verifySmsCode(phone, code) {
   return { ok: true };
 }
 
+/* ---------------- 真人对战：匹配与房间（服务器权威牌桌） ---------------- */
+const PVP_EMOJIS = ['🍎', '🚀', '🐱', '🌈', '⚽', '🎵', '🌻', '🐳'];
+const pvpQueue = []; /* [{ token, phone, at }] */
+const pvpRooms = new Map(); /* roomId -> room */
+let pvpSeq = 0;
+
+function shuffleArr(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function nicknameOf(phone) {
+  const scores = loadScores();
+  return (scores[phone] && scores[phone].nickname) ||
+    phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
+}
+
+function createRoom(aEntry, bEntry) {
+  const id = 'R' + Date.now().toString(36) + (++pvpSeq);
+  const deck = shuffleArr([...PVP_EMOJIS, ...PVP_EMOJIS]).map((e) => ({ e, done: false }));
+  const room = {
+    id,
+    a: aEntry.phone,
+    b: bEntry.phone,
+    tokens: { a: aEntry.token, b: bEntry.token },
+    turn: Math.random() < 0.5 ? 'a' : 'b',
+    deck,
+    open: [],
+    scores: { a: 0, b: 0 },
+    status: 'playing',
+    lastPoll: { a: Date.now(), b: Date.now() },
+    over: null,
+    createdAt: Date.now(),
+  };
+  pvpRooms.set(id, room);
+  return room;
+}
+
+function sideOf(room, phone) {
+  return room.a === phone ? 'a' : 'b';
+}
+
+function roomView(room, phone) {
+  const side = sideOf(room, phone);
+  const opp = side === 'a' ? 'b' : 'a';
+  const open = room.open.map((o) => ({ i: o.i, e: room.deck[o.i].e }));
+  const done = room.deck.map((c, i) => (c.done ? { i, e: c.e } : null)).filter(Boolean);
+  let result = null, delta = 0, coins = 0;
+  if (room.over) {
+    result = room.over[side];
+    delta = room.over.delta[side];
+    coins = result === 'win' ? 50 : result === 'draw' ? 20 : 10;
+  }
+  return {
+    status: room.status,
+    roomId: room.id,
+    you: side,
+    yourTurn: room.status === 'playing' && room.turn === side,
+    open,
+    done,
+    youScore: room.scores[side],
+    oppScore: room.scores[opp],
+    oppName: nicknameOf(side === 'a' ? room.b : room.a),
+    result,
+    delta,
+    coins,
+    reason: room.over ? room.over.reason : null,
+    canAct: room.status === 'playing' && room.turn === side && room.open.length < 2,
+  };
+}
+
+/* 对局结束：把积分/战绩写入排行榜成绩（服务器权威） */
+function applyMultiplayerResult(room) {
+  const scores = loadScores();
+  for (const side of ['a', 'b']) {
+    const phone = room[side];
+    const r = room.over[side];
+    const delta = room.over.delta[side];
+    const prev = scores[phone] || { points: 0, w: 0, d: 0, l: 0 };
+    scores[phone] = {
+      nickname: prev.nickname || null,
+      points: Math.max(0, (prev.points || 0) + delta),
+      w: (prev.w || 0) + (r === 'win' ? 1 : 0),
+      d: (prev.d || 0) + (r === 'draw' ? 1 : 0),
+      l: (prev.l || 0) + (r === 'lose' ? 1 : 0),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  saveScores(scores);
+}
+
+function finishRoom(room, winnerSide, reason) {
+  if (room.status === 'over') return;
+  room.status = 'over';
+  let deltaA, deltaB, resA, resB;
+  const draw = winnerSide === 'draw' || (!winnerSide && room.scores.a === room.scores.b);
+  const aWin = winnerSide === 'a' || (!winnerSide && room.scores.a > room.scores.b);
+  if (draw) {
+    resA = resB = 'draw';
+    deltaA = deltaB = 10;
+  } else if (aWin) {
+    resA = 'win'; resB = 'lose';
+    deltaA = 30; deltaB = -20;
+  } else {
+    resA = 'lose'; resB = 'win';
+    deltaA = -20; deltaB = 30;
+  }
+  room.over = { a: resA, b: resB, delta: { a: deltaA, b: deltaB }, reason: reason || '' };
+  applyMultiplayerResult(room);
+  setTimeout(() => pvpRooms.delete(room.id), 120000); /* 结果保留 2 分钟供客户端拉取 */
+}
+
+function pvpAction(room, side, index) {
+  if (room.status !== 'playing') return { ok: false, error: '对局已结束' };
+  if (room.turn !== side) return { ok: false, error: '还没轮到你' };
+  if (room.open.length >= 2) return { ok: false, error: '请稍候' };
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= room.deck.length) return { ok: false, error: '无效的牌' };
+  if (room.deck[i].done) return { ok: false, error: '该牌已配对' };
+  if (room.open.some((o) => o.i === i)) return { ok: false, error: '该牌已翻开' };
+  room.open.push({ i, by: side });
+  room.lastPoll[side] = Date.now();
+  if (room.open.length === 2) {
+    const [x, y] = room.open;
+    if (room.deck[x.i].e === room.deck[y.i].e) {
+      room.deck[x.i].done = true;
+      room.deck[y.i].done = true;
+      room.scores[side] += 1;
+      room.open = [];
+      if (room.deck.every((c) => c.done)) {
+        finishRoom(room, room.scores.a === room.scores.b ? 'draw' : room.scores.a > room.scores.b ? 'a' : 'b', 'allmatched');
+      }
+    } else {
+      /* 不匹配：1.3 秒后盖回并换手 */
+      const cur = room;
+      const nextSide = side === 'a' ? 'b' : 'a';
+      setTimeout(() => {
+        if (cur.status === 'playing') {
+          cur.open = [];
+          cur.turn = nextSide;
+        }
+      }, 1300);
+    }
+  }
+  return { ok: true };
+}
+
+/* 定时清理：队列 60s 过期；一方 20s 无轮询判负；双方都掉线销毁房间 */
+setInterval(() => {
+  const now = Date.now();
+  for (let k = pvpQueue.length - 1; k >= 0; k--) {
+    if (now - pvpQueue[k].at > 60000) pvpQueue.splice(k, 1);
+  }
+  for (const room of [...pvpRooms.values()]) {
+    if (room.status !== 'playing') continue;
+    const aIdle = now - room.lastPoll.a > 20000;
+    const bIdle = now - room.lastPoll.b > 20000;
+    if (aIdle && bIdle) pvpRooms.delete(room.id);
+    else if (aIdle) finishRoom(room, 'b', 'opponent_left');
+    else if (bIdle) finishRoom(room, 'a', 'opponent_left');
+  }
+}, 5000);
+
+function findRoomByToken(token) {
+  for (const room of pvpRooms.values()) {
+    if (room.tokens.a === token || room.tokens.b === token) return room;
+  }
+  return null;
+}
+
 /* ---------------- 路由 ---------------- */
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
@@ -369,6 +542,89 @@ const server = http.createServer(async (req, res) => {
       });
       saveScores(scores);
       return json(res, 200, { ok: true, nickname });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* ===== 真人对战 ===== */
+
+  /* 加入匹配队列（已在房间则直接返回房间，支持断线重连） */
+  if (p === '/api/match/join' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录后再进行真人对战' });
+      const existing = findRoomByToken(token);
+      if (existing) {
+        if (existing.status === 'over') {
+          pvpRooms.delete(existing.id); /* 结算后的房间：开新局重新匹配 */
+        } else {
+          existing.lastPoll[sideOf(existing, phone)] = Date.now();
+          return json(res, 200, { ok: true, status: existing.status, room: roomView(existing, phone) });
+        }
+      }
+      const qi = pvpQueue.findIndex((q) => q.token === token);
+      if (qi >= 0) pvpQueue.splice(qi, 1);
+      const waiting = pvpQueue.find((q) => q.phone !== phone);
+      if (waiting) {
+        pvpQueue.splice(pvpQueue.indexOf(waiting), 1);
+        const room = createRoom(waiting, { token, phone });
+        return json(res, 200, { ok: true, status: 'playing', room: roomView(room, phone) });
+      }
+      pvpQueue.push({ token, phone, at: Date.now() });
+      return json(res, 200, { ok: true, status: 'waiting' });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 查询匹配/对局状态（轮询） */
+  if (p === '/api/match/status' && req.method === 'GET') {
+    const token = u.searchParams.get('token') || req.headers['x-auth-token'];
+    const phone = phoneByToken(token);
+    if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+    const room = findRoomByToken(token);
+    if (room) {
+      room.lastPoll[sideOf(room, phone)] = Date.now();
+      return json(res, 200, { ok: true, status: room.status, room: roomView(room, phone) });
+    }
+    const inQueue = pvpQueue.some((q) => q.token === token);
+    return json(res, 200, { ok: true, status: inQueue ? 'waiting' : 'idle' });
+  }
+
+  /* 取消匹配 / 离开对局（对局中离开判负） */
+  if (p === '/api/match/leave' && req.method === 'POST') {
+    const token = req.headers['x-auth-token'];
+    const phone = phoneByToken(token);
+    if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+    const qi = pvpQueue.findIndex((q) => q.token === token);
+    if (qi >= 0) pvpQueue.splice(qi, 1);
+    const room = findRoomByToken(token);
+    if (room) {
+      if (room.status === 'playing') {
+        const side = sideOf(room, phone);
+        finishRoom(room, side === 'a' ? 'b' : 'a', 'opponent_left');
+      } else {
+        pvpRooms.delete(room.id);
+      }
+    }
+    return json(res, 200, { ok: true });
+  }
+
+  /* 翻牌操作（服务器校验回合/牌面） */
+  if (p === '/api/match/action' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      const room = findRoomByToken(token);
+      if (!room) return json(res, 404, { ok: false, error: '对局不存在或已结束' });
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const side = sideOf(room, phone);
+      const r = pvpAction(room, side, body.index);
+      if (!r.ok) return json(res, 400, { ok: false, error: r.error });
+      return json(res, 200, { ok: true, status: room.status, room: roomView(room, phone) });
     } catch (e) {
       return json(res, 500, { ok: false, error: e.message });
     }

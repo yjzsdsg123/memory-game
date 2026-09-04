@@ -1113,6 +1113,100 @@ button {
   background: color-mix(in srgb, var(--primary) 8%, var(--panel));
 }
 
+/* ========== 模式切换（人机/真人） ========== */
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 10px 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-light);
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-tab.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ========== 真人对战 ========== */
+.pvp-match {
+  text-align: center;
+  padding: 36px 20px 30px;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+}
+
+.pvp-emoji {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.pvp-line {
+  font-size: 15px;
+  line-height: 1.8;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.pvp-hint {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-light);
+  line-height: 1.8;
+}
+
+.pvp-spinner {
+  width: 46px;
+  height: 46px;
+  margin: 6px auto 18px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: pvp-spin 0.9s linear infinite;
+}
+
+@keyframes pvp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.turn-indicator.waiting {
+  color: var(--text-light);
+}
+
+.pvp-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.pvp-actions .btn {
+  min-width: 130px;
+}
+
+.pvp-leave {
+  display: block;
+  margin: 14px auto 0;
+}
+
+.pvp-game .fcard {
+  cursor: pointer;
+}
+
 /* ========== 激励广告（模拟） ========== */
 .ad-preview {
   background: linear-gradient(135deg, #94a3b8, #475569 55%, #1e293b);

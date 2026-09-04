@@ -149,6 +149,11 @@
         <div class="game-title">🏆 排位赛 · 翻牌对抗</div>
         <button class="btn small primary" id="rankRestart">重新开始</button>
       </div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tabAi">🤖 人机对战</button>
+        <button class="mode-tab" id="tabPvp">👥 真人对战</button>
+      </div>
+      <div id="aiArea">
       <div class="rank-bar">
         <div class="rank-badge" id="rankBadge">🥉</div>
         <div class="rank-info">
@@ -184,6 +189,45 @@
       </div>
       <div class="flip-grid" id="rankGrid"></div>
       <div class="game-msg" id="rankMsg"></div>
+      </div>
+
+      <!-- ===== 真人对战 ===== -->
+      <div id="pvpArea" hidden>
+        <div class="pvp-match" id="pvpIdle">
+          <div class="pvp-emoji">👥</div>
+          <p class="pvp-line">与真实玩家实时对战翻牌配对<br/>胜者 +30 积分，负者 -20，战平 +10</p>
+          <button class="btn primary" id="pvpJoin">🔍 开始匹配</button>
+          <p class="pvp-hint">需要登录账号；匹配中可随时取消<br/>对手中途离开你将直接获胜</p>
+        </div>
+        <div class="pvp-match" id="pvpWaiting" hidden>
+          <div class="pvp-spinner"></div>
+          <p class="pvp-line">正在为你寻找对手…</p>
+          <button class="btn ghost small" id="pvpCancel">取消匹配</button>
+        </div>
+        <div class="pvp-game" id="pvpGame" hidden>
+          <div class="rank-bar">
+            <div class="rank-badge" id="pvpBadge">🥉</div>
+            <div class="rank-info">
+              <b id="pvpTierName">青铜</b>
+              <span id="pvpPoints">0 积分</span>
+            </div>
+            <div class="rank-opp">👤 对手：<span id="pvpOppName">匹配中</span></div>
+          </div>
+          <div class="rank-score">
+            <div class="side you"><span>你</span><b id="pvpYou">0</b></div>
+            <div class="vs">VS</div>
+            <div class="side ai"><b id="pvpOpp">0</b><span id="pvpOppLabel">对手</span></div>
+          </div>
+          <div class="turn-indicator" id="pvpTurn">等待开局…</div>
+          <div class="flip-grid" id="pvpGrid"></div>
+          <div class="game-msg" id="pvpMsg"></div>
+          <div class="pvp-actions" id="pvpActions" hidden>
+            <button class="btn ghost" id="pvpHome">返回首页</button>
+            <button class="btn primary" id="pvpAgain">再来一局</button>
+          </div>
+          <button class="btn ghost small pvp-leave" id="pvpLeave">认输离开</button>
+        </div>
+      </div>
     </section>
 
     <!-- ========== 装饰商店 ========== -->

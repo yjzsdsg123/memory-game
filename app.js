@@ -988,7 +988,10 @@ function showRankResult({ result, you, ai, delta, bonus, coins, promoted, demote
 }
 
 $('rankRestart').addEventListener('click', newRank);
-$('rankBack').addEventListener('click', () => showView('home'));
+$('rankBack').addEventListener('click', () => {
+  if (!$('pvpArea').hidden) pvpLeave(true);
+  showView('home');
+});
 $('useFreeze').addEventListener('click', useFreeze);
 $('usePeek').addEventListener('click', usePeek);
 $('rrAgain').addEventListener('click', newRank);
@@ -1408,7 +1411,258 @@ $('boardBack').addEventListener('click', () => showView('home'));
 $('boardRefresh').addEventListener('click', loadBoard);
 $('nickSave').addEventListener('click', saveNickname);
 
-/* ================= 后端服务地址（短信登录等接口使用） ================= */
+/* ================= 真人对战（PvP，服务器权威牌桌） ================= */
+let pvpPoll = null;
+let pvpState = 'idle'; /* idle | waiting | playing | over */
+let pvpLast = null;
+let pvpBuilt = false;
+let pvpPrevOpen = 0;
+let pvpPrevDone = 0;
+
+async function pvpPost(path, body) {
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), 7000);
+  const r = await fetch(PAY_API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify(body || {}),
+    signal: ctrl.signal,
+  });
+  return r.json();
+}
+
+function pvpSetMode(isPvp) {
+  $('aiArea').hidden = isPvp;
+  $('pvpArea').hidden = !isPvp;
+  $('tabAi').classList.toggle('active', !isPvp);
+  $('tabPvp').classList.toggle('active', isPvp);
+  $('rankRestart').style.visibility = isPvp ? 'hidden' : 'visible';
+  if (isPvp) {
+    stopRank();
+    pvpReset();
+  } else {
+    pvpLeave(true);
+    newRank();
+  }
+}
+
+function pvpSetIdleMsg(msg) {
+  const hint = document.querySelector('#pvpIdle .pvp-hint');
+  if (hint) hint.textContent = msg;
+}
+
+function pvpReset() {
+  stopPvpPoll();
+  pvpState = 'idle';
+  pvpLast = null;
+  pvpBuilt = false;
+  pvpPrevOpen = 0;
+  pvpPrevDone = 0;
+  $('pvpIdle').hidden = false;
+  $('pvpWaiting').hidden = true;
+  $('pvpGame').hidden = true;
+  $('pvpActions').hidden = true;
+  $('pvpGrid').innerHTML = '';
+  $('pvpMsg').textContent = '';
+  $('pvpMsg').className = 'game-msg';
+  const tier = rankTierOf(getRankPoints());
+  $('pvpBadge').textContent = tier.icon;
+  $('pvpTierName').textContent = tier.name;
+  $('pvpPoints').textContent = getRankPoints() + ' 积分';
+}
+
+function stopPvpPoll() {
+  if (pvpPoll) {
+    clearInterval(pvpPoll);
+    pvpPoll = null;
+  }
+}
+
+async function pvpJoin() {
+  if (!getToken()) {
+    $('userBtn').click();
+    return;
+  }
+  $('pvpIdle').hidden = true;
+  $('pvpWaiting').hidden = false;
+  $('pvpGame').hidden = true;
+  try {
+    const j = await pvpPost('/api/match/join', {});
+    if (!j.ok) throw new Error(j.error || '匹配失败');
+    if (j.status === 'playing' && j.room) {
+      pvpEnterRoom(j.room);
+    } else {
+      pvpState = 'waiting';
+    }
+    /* 无论等待匹配还是直接进房（第二个加入者/断线重连），都要轮询同步牌桌 */
+    startPvpPoll();
+  } catch {
+    pvpReset();
+    pvpSetIdleMsg('⚠️ 无法连接对战服务器，请确认电脑端后端正在运行；人机对战不受影响');
+    sndMiss();
+  }
+}
+
+function startPvpPoll() {
+  stopPvpPoll();
+  pvpPoll = setInterval(pvpPollOnce, 900);
+  pvpPollOnce();
+}
+
+async function pvpPollOnce() {
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 7000);
+    const r = await fetch(PAY_API_BASE + '/api/match/status?token=' + encodeURIComponent(getToken()), { signal: ctrl.signal });
+    const j = await r.json();
+    if (!j.ok) return;
+    if (j.status === 'idle') { pvpReset(); return; }
+    if (j.status === 'waiting') { pvpState = 'waiting'; return; }
+    if (j.room) pvpEnterRoom(j.room);
+  } catch { /* 网络抖动，下次轮询重试 */ }
+}
+
+function buildPvpGrid() {
+  const grid = $('pvpGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 16; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'fcard';
+    btn.innerHTML = '<div class="fcard-inner"><div class="face back"></div><div class="face front"></div></div>';
+    btn.addEventListener('click', () => onPvpCard(i));
+    grid.appendChild(btn);
+  }
+}
+
+function pvpEnterRoom(room) {
+  pvpLast = room;
+  $('pvpIdle').hidden = true;
+  $('pvpWaiting').hidden = true;
+  $('pvpGame').hidden = false;
+  if (!pvpBuilt) { buildPvpGrid(); pvpBuilt = true; }
+  $('pvpOppName').textContent = room.oppName;
+  $('pvpYou').textContent = room.youScore;
+  $('pvpOpp').textContent = room.oppScore;
+
+  /* 音效：新翻开/新配对（结算瞬间只播一次） */
+  if (room.status !== 'over' || pvpState !== 'over') {
+    if (room.open.length > pvpPrevOpen) sndFlip();
+    if (room.done.length > pvpPrevDone) sndMatch();
+  }
+  pvpPrevOpen = room.open.length;
+  pvpPrevDone = room.done.length;
+
+  pvpRenderBoard(room);
+
+  if (room.status === 'over') {
+    if (pvpState !== 'over') pvpFinish(room);
+    pvpState = 'over';
+    return;
+  }
+  pvpState = 'playing';
+  $('pvpActions').hidden = true;
+  $('pvpTurn').textContent = room.yourTurn ? '👉 你的回合，翻两张相同图案' : '⏳ 对手思考中…';
+  $('pvpTurn').className = 'turn-indicator' + (room.yourTurn ? '' : ' waiting');
+  $('pvpMsg').textContent = '';
+}
+
+function pvpRenderBoard(room) {
+  const openMap = {};
+  room.open.forEach((o) => { openMap[o.i] = o.e; });
+  const doneMap = {};
+  room.done.forEach((d) => { doneMap[d.i] = d.e; });
+  const grid = $('pvpGrid');
+  for (let i = 0; i < 16; i++) {
+    const card = grid.children[i];
+    const front = card.querySelector('.face.front');
+    if (doneMap[i] !== undefined) {
+      if (!front.textContent) front.textContent = doneMap[i];
+      card.classList.add('flipped', 'done');
+    } else if (openMap[i] !== undefined) {
+      if (!front.textContent) front.textContent = openMap[i];
+      card.classList.add('flipped');
+      card.classList.remove('done');
+    } else {
+      card.classList.remove('flipped');
+    }
+    card.style.pointerEvents = room.canAct ? 'auto' : 'none';
+  }
+}
+
+async function onPvpCard(i) {
+  if (!pvpLast || pvpLast.status !== 'playing' || !pvpLast.canAct) return;
+  const card = $('pvpGrid').children[i];
+  if (card.classList.contains('flipped')) return;
+  card.classList.add('flipped');
+  try {
+    const j = await pvpPost('/api/match/action', { index: i });
+    if (j.ok && j.room) pvpEnterRoom(j.room);
+    else card.classList.remove('flipped');
+  } catch {
+    card.classList.remove('flipped');
+  }
+}
+
+function pvpFinish(room) {
+  stopPvpPoll();
+  const r = room.result;
+  const left = room.reason === 'opponent_left';
+  let msg, cls;
+  if (r === 'win') {
+    msg = left ? `🎉 对手已离开，你获胜！积分 +${room.delta}` : `🎉 战胜 ${room.oppName} ${room.youScore}:${room.oppScore}！积分 +${room.delta}`;
+    cls = 'ok';
+    sndWin();
+  } else if (r === 'lose') {
+    msg = `😢 ${room.youScore}:${room.oppScore} 惜败，积分 ${room.delta}`;
+    cls = 'bad';
+    sndMiss();
+  } else {
+    msg = `🤝 ${room.youScore}:${room.oppScore} 战平，积分 +${room.delta}`;
+    cls = '';
+    sndMatch();
+  }
+  $('pvpMsg').textContent = msg + `　🪙 +${room.coins} 金币`;
+  $('pvpMsg').className = 'game-msg ' + cls;
+  $('pvpTurn').textContent = '本局结束';
+  $('pvpActions').hidden = false;
+
+  /* 本地镜像：积分/战绩/金币与服务器保持一致 */
+  const pts = Math.max(0, getRankPoints() + room.delta);
+  localStorage.setItem('mem_rank_points', String(pts));
+  const s = getRankStats();
+  if (r === 'win') { s.w += 1; s.streak += 1; s.bestStreak = Math.max(s.bestStreak, s.streak); }
+  else if (r === 'lose') { s.l += 1; s.streak = 0; }
+  else { s.d += 1; s.streak = 0; }
+  s.peak = Math.max(s.peak, pts);
+  saveRankStats(s);
+  addCoins(room.coins);
+  renderCoins(true);
+  renderBest();
+  /* 同步刷新对战面板的段位/积分显示 */
+  const tier = rankTierOf(pts);
+  $('pvpBadge').textContent = tier.icon;
+  $('pvpTierName').textContent = tier.name;
+  $('pvpPoints').textContent = pts + ' 积分';
+  pvpPrevOpen = 0;
+  pvpPrevDone = 0;
+}
+
+async function pvpLeave(silent) {
+  stopPvpPoll();
+  try { await pvpPost('/api/match/leave', {}); } catch { /* 离线忽略 */ }
+  if (!silent) pvpReset();
+  else { pvpState = 'idle'; pvpLast = null; }
+}
+
+$('tabAi').addEventListener('click', () => pvpSetMode(false));
+$('tabPvp').addEventListener('click', () => pvpSetMode(true));
+$('pvpJoin').addEventListener('click', pvpJoin);
+$('pvpCancel').addEventListener('click', () => pvpLeave(false));
+$('pvpAgain').addEventListener('click', () => { pvpReset(); pvpJoin(); });
+$('pvpHome').addEventListener('click', async () => { await pvpLeave(true); showView('home'); });
+$('pvpLeave').addEventListener('click', () => pvpLeave(false));
+
+/* ================= 后端服务地址（短信登录/排行榜/对战接口使用） ================= */
 const PAY_API_BASE = 'http://localhost:8080';
 
 /* ================= 激励广告（模拟，每日限 3 次） ================= */
