@@ -1312,11 +1312,165 @@ $('adReward').addEventListener('click', () => {
 $('watchAd').addEventListener('click', startAd);
 $('adClose').addEventListener('click', () => closeAd(false));
 
-/* 初始化：保底 3 个提示 + 应用已装备的卡背 + 金币显示 */
+/* ================= 手机号登录（演示流程） ================= */
+/* 真实环境：sendCode 改为请求后端 /api/sms/send（后端对接短信服务），
+   doLogin 改为请求 /api/sms/verify 校验并返回 token，localStorage 存 token。 */
+let loginCountdown = null;
+let sentCode = '';
+
+function getUser() {
+  return localStorage.getItem('mem_user');
+}
+
+function maskPhone(p) {
+  if (!p || p.length !== 11) return p || '';
+  return p.slice(0, 3) + '****' + p.slice(7);
+}
+
+function setLoginMsg(text) {
+  $('loginMsg').textContent = text || '';
+}
+
+function renderUser() {
+  const p = getUser();
+  const btn = $('userBtn');
+  if (p) {
+    btn.classList.add('logged');
+    $('userLabel').textContent = maskPhone(p);
+  } else {
+    btn.classList.remove('logged');
+    $('userLabel').textContent = '登录';
+  }
+}
+
+function openLogin() {
+  const p = getUser();
+  $('loginOverlay').hidden = false;
+  setLoginMsg('');
+  $('loginDemoCode').hidden = true;
+  if (p) {
+    /* 已登录：显示账号信息 */
+    $('loginForm').hidden = true;
+    $('loginAccount').hidden = false;
+    $('acctPhone').textContent = maskPhone(p);
+  } else {
+    $('loginForm').hidden = false;
+    $('loginAccount').hidden = true;
+    $('loginPhone').value = '';
+    $('loginCode').value = '';
+    resetSendBtn();
+    setTimeout(() => $('loginPhone').focus(), 50);
+  }
+}
+
+function closeLogin() {
+  $('loginOverlay').hidden = true;
+}
+
+function resetSendBtn() {
+  if (loginCountdown) {
+    clearInterval(loginCountdown);
+    loginCountdown = null;
+  }
+  const btn = $('loginSend');
+  btn.disabled = false;
+  btn.textContent = '获取验证码';
+}
+
+function validPhone(p) {
+  return /^1[3-9]\d{9}$/.test(p);
+}
+
+function sendCode() {
+  const phone = $('loginPhone').value.trim();
+  if (!validPhone(phone)) {
+    setLoginMsg('请输入正确的 11 位手机号');
+    sndMiss();
+    return;
+  }
+  setLoginMsg('');
+  /* 演示：本地生成 6 位验证码直接显示；真实环境此处调用短信接口 */
+  sentCode = String(Math.floor(100000 + Math.random() * 900000));
+  const demo = $('loginDemoCode');
+  demo.hidden = false;
+  demo.textContent = `演示验证码：${sentCode}（真实环境将短信发送至 ${maskPhone(phone)}）`;
+  sndMatch();
+  /* 60 秒倒计时 */
+  let left = 60;
+  const btn = $('loginSend');
+  resetSendBtn(); /* 清掉可能存在的旧倒计时 */
+  btn.disabled = true;
+  btn.textContent = `${left}s 后重发`;
+  loginCountdown = setInterval(() => {
+    left -= 1;
+    if (left <= 0) {
+      resetSendBtn();
+    } else {
+      btn.textContent = `${left}s 后重发`;
+    }
+  }, 1000);
+}
+
+function doLogin() {
+  const phone = $('loginPhone').value.trim();
+  const code = $('loginCode').value.trim();
+  if (!validPhone(phone)) {
+    setLoginMsg('请输入正确的手机号');
+    sndMiss();
+    return;
+  }
+  if (!sentCode) {
+    setLoginMsg('请先获取验证码');
+    sndMiss();
+    return;
+  }
+  if (code.length !== 6) {
+    setLoginMsg('请输入 6 位验证码');
+    sndMiss();
+    return;
+  }
+  if (code !== sentCode) {
+    setLoginMsg('验证码错误，请重新输入');
+    sndMiss();
+    return;
+  }
+  localStorage.setItem('mem_user', phone);
+  sentCode = '';
+  resetSendBtn();
+  renderUser();
+  sndWin();
+  closeLogin();
+}
+
+function logout() {
+  localStorage.removeItem('mem_user');
+  renderUser();
+  sndFlip();
+  closeLogin();
+}
+
+$('userBtn').addEventListener('click', openLogin);
+$('loginClose').addEventListener('click', closeLogin);
+$('loginOverlay').addEventListener('click', (e) => {
+  if (e.target === $('loginOverlay')) closeLogin();
+});
+$('loginSend').addEventListener('click', sendCode);
+$('loginSubmit').addEventListener('click', doLogin);
+$('loginLogout').addEventListener('click', logout);
+/* 输入框只允许数字 */
+$('loginPhone').addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 11);
+});
+$('loginCode').addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+});
+
+/* 初始化：保底 3 个提示 + 应用已装备的卡背 + 金币显示 + 登录态 */
 ensureHints();
 document.body.dataset.cardback = getCardback();
 renderCoins();
 renderBest();
+renderUser();
 
 /* PWA：仅 HTTP(S) 环境注册 Service Worker（双击 file:// 打开不受影响） */
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
