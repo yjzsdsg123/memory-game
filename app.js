@@ -2297,7 +2297,7 @@ const WORLD_AVATARS = ['🧑‍🎨', '🧙‍♀️', '🧙‍♂️', '🦸‍
 
 /* 建筑（逻辑坐标 1000×680，view = 进入的功能视图） */
 const WORLD_BUILDINGS = [
-  { id: 'flip',    emoji: '🃏', name: '翻牌屋',     x: 60,  y: 80,  w: 140, h: 104, view: 'flip' },
+  { id: 'academy', emoji: '🎓', name: '翻牌学院',   x: 60,  y: 80,  w: 140, h: 104, view: 'academy' },
   { id: 'digit',   emoji: '🔢', name: '数字塔',     x: 300, y: 60,  w: 140, h: 104, view: 'digit' },
   { id: 'simon',   emoji: '🎨', name: '彩灯广场',   x: 540, y: 80,  w: 140, h: 104, view: 'simon' },
   { id: 'board',   emoji: '📊', name: '排行榜碑',   x: 790, y: 70,  w: 140, h: 104, view: 'board' },
@@ -2342,7 +2342,7 @@ const WORLD_BOTS = [
 const BOT_LINES = [
   '我在这儿刷了一整天牌了，脑子快不够用啦！',
   '听说排位竞技场赢一把给 50 金币，心动了没？',
-  '别光站着呀，去翻牌屋露两手？',
+  '别光站着呀，去翻牌学院露两手？',
   '数字塔顶层的数字有 12 位那么长，你敢挑战吗？',
   '今天小镇来了好多新朋友，真热闹～',
   '彩灯广场的灯光节奏，我已经能闭着眼复现了！',
