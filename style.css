@@ -635,6 +635,186 @@ button {
   min-height: 20px;
 }
 
+/* 段位进度条 */
+.rank-progress {
+  margin-bottom: 12px;
+}
+
+.rank-progress-bar {
+  height: 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--border));
+  overflow: hidden;
+}
+
+.rank-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--primary), #f59e0b);
+  transition: width 0.6s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.rank-progress-text {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 6px;
+}
+
+/* 战绩行 */
+.rank-stats {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--text-light);
+  margin-bottom: 14px;
+}
+
+.rank-stats b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-stats .rank-streak {
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+.rank-stats .rank-streak b {
+  color: #f59e0b;
+}
+
+/* ===== 结算弹窗 ===== */
+.rank-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(20, 18, 31, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: overlay-in 0.25s ease;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.rank-result-card {
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 30px 28px 24px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  animation: result-pop 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2);
+}
+
+@keyframes result-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 晋级：金色光效 */
+.rank-result-card.promote {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 30%, transparent), 0 12px 40px rgba(245, 158, 11, 0.25);
+  animation: result-pop 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2), promote-glow 1.6s ease-in-out 0.45s infinite;
+}
+
+@keyframes promote-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 30%, transparent), 0 12px 40px rgba(245, 158, 11, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, #f59e0b 18%, transparent), 0 12px 52px rgba(245, 158, 11, 0.45);
+  }
+}
+
+.rank-result-icon {
+  font-size: 56px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.rank-result-title {
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.rank-result-card.win .rank-result-title {
+  color: var(--right);
+}
+
+.rank-result-card.lose .rank-result-title {
+  color: var(--wrong);
+}
+
+.rank-result-card.draw .rank-result-title {
+  color: var(--text-light);
+}
+
+.rank-result-score {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 8px;
+}
+
+.rank-result-delta {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+
+.rank-result-tier {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f59e0b;
+  min-height: 22px;
+  margin-bottom: 4px;
+}
+
+.rank-result-sub {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.rank-result-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.rank-result-actions .btn {
+  flex: 1;
+}
+
 @media (max-width: 480px) {
   .flip-grid {
     gap: 7px;

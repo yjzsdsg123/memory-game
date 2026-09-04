@@ -141,6 +141,17 @@
         </div>
         <div class="rank-opp">🤖 对手：<span id="rankOppName">青铜守卫</span></div>
       </div>
+      <div class="rank-progress">
+        <div class="rank-progress-bar"><div class="rank-progress-fill" id="rankProgressFill"></div></div>
+        <span class="rank-progress-text" id="rankProgressText">距白银还需 300 分</span>
+      </div>
+      <div class="rank-stats" id="rankStats">
+        <span>胜 <b id="rankWins">0</b></span>
+        <span>平 <b id="rankDraws">0</b></span>
+        <span>负 <b id="rankLosses">0</b></span>
+        <span>胜率 <b id="rankWinRate">--</b></span>
+        <span class="rank-streak" id="rankStreak" hidden>🔥 连胜 <b id="rankStreakNum">0</b></span>
+      </div>
       <div class="rank-score">
         <div class="side you"><span>你</span><b id="rankYou">0</b></div>
         <div class="vs">VS</div>
@@ -151,6 +162,22 @@
       <div class="game-msg" id="rankMsg"></div>
     </section>
   </main>
+
+  <!-- ========== 排位赛结算弹窗 ========== -->
+  <div class="rank-result-overlay" id="rankResult" hidden>
+    <div class="rank-result-card" id="rankResultCard">
+      <div class="rank-result-icon" id="rrIcon">🎉</div>
+      <div class="rank-result-title" id="rrTitle">胜利</div>
+      <div class="rank-result-score" id="rrScore">8 : 2</div>
+      <div class="rank-result-delta" id="rrDelta">+30 积分</div>
+      <div class="rank-result-tier" id="rrTier"></div>
+      <div class="rank-result-sub" id="rrSub"></div>
+      <div class="rank-result-actions">
+        <button class="btn ghost" id="rrHome">返回首页</button>
+        <button class="btn primary" id="rrAgain">再来一局</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

@@ -566,6 +566,20 @@ function getRankPoints() {
   return Number(localStorage.getItem('mem_rank_points')) || 0;
 }
 
+/* 排位赛战绩：胜/平/负、当前连胜、最高连胜、历史最高积分（集中存储） */
+function getRankStats() {
+  try {
+    return Object.assign({ w: 0, d: 0, l: 0, streak: 0, bestStreak: 0, peak: 0 },
+      JSON.parse(localStorage.getItem('mem_rank_stats')) || {});
+  } catch {
+    return { w: 0, d: 0, l: 0, streak: 0, bestStreak: 0, peak: 0 };
+  }
+}
+
+function saveRankStats(s) {
+  localStorage.setItem('mem_rank_stats', JSON.stringify(s));
+}
+
 function rankTierOf(points) {
   let t = RANK_TIERS[0];
   for (const tier of RANK_TIERS) if (points >= tier.min) t = tier;
@@ -581,6 +595,7 @@ function stopRank() {
 
 function newRank() {
   stopRank();
+  $('rankResult').hidden = true;
   const deck = shuffle([...FLIP_EMOJIS, ...FLIP_EMOJIS]).map((e) => ({ e, done: false, open: false }));
   rank = { deck, open: [], you: 0, ai: 0, turn: 'you', busy: false, over: false, aiMem: [], timers: [] };
   renderRankGrid();
@@ -630,6 +645,7 @@ function rankUpdateCard(i) {
 function renderRankHud() {
   const pts = getRankPoints();
   const tier = rankTierOf(pts);
+  const stats = getRankStats();
   $('rankBadge').textContent = tier.icon;
   $('rankName').textContent = tier.name;
   $('rankPoints').textContent = pts + ' 积分';
@@ -639,6 +655,34 @@ function renderRankHud() {
   $('rankTurn').textContent = rank.over ? '本局结束' : (rank.turn === 'you' ? '你的回合' : `${tier.opp} 思考中…`);
   document.querySelector('.rank-score .side.you').classList.toggle('active', !rank.over && rank.turn === 'you');
   document.querySelector('.rank-score .side.ai').classList.toggle('active', !rank.over && rank.turn === 'ai');
+
+  /* 段位进度条 */
+  const tierIdx = RANK_TIERS.indexOf(tier);
+  const next = RANK_TIERS[tierIdx + 1];
+  const fill = $('rankProgressFill');
+  const ptext = $('rankProgressText');
+  if (next) {
+    const pct = Math.min(100, Math.round(((pts - tier.min) / (next.min - tier.min)) * 100));
+    fill.style.width = pct + '%';
+    ptext.textContent = `距${next.name}还需 ${next.min - pts} 分`;
+  } else {
+    fill.style.width = '100%';
+    ptext.textContent = '👑 已达最高段位';
+  }
+
+  /* 战绩 */
+  $('rankWins').textContent = stats.w;
+  $('rankDraws').textContent = stats.d;
+  $('rankLosses').textContent = stats.l;
+  const total = stats.w + stats.d + stats.l;
+  $('rankWinRate').textContent = total ? Math.round((stats.w / total) * 100) + '%' : '--';
+  const streakEl = $('rankStreak');
+  if (stats.streak >= 2) {
+    streakEl.hidden = false;
+    $('rankStreakNum').textContent = stats.streak;
+  } else {
+    streakEl.hidden = true;
+  }
 }
 
 function setRankMsg(text, cls) {
@@ -793,35 +837,87 @@ function aiMove() {
 function settleRank() {
   rank.over = true;
   const you = rank.you, ai = rank.ai;
-  const oldMin = rankTierOf(getRankPoints()).min;
-  let delta, msg;
-  if (you > ai) {
-    delta = 30;
-    msg = `🎉 胜利 ${you} : ${ai}！积分 +30`;
+  const result = you > ai ? 'win' : you < ai ? 'lose' : 'draw';
+
+  /* ===== 集中更新：积分、战绩、连胜、峰值（单一状态出口） ===== */
+  const stats = getRankStats();
+  const oldStreak = stats.streak;
+  let base, bonus = 0;
+  if (result === 'win') {
+    base = 30;
+    /* 连胜奖励：第 2 场连胜起每场 +5，封顶 +25 */
+    bonus = oldStreak >= 1 ? Math.min(oldStreak, 5) * 5 : 0;
+    stats.w += 1;
+    stats.streak = oldStreak + 1;
+    stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
     sndWin();
-  } else if (you < ai) {
-    delta = -20;
-    msg = `😭 惜败 ${you} : ${ai}，积分 -20`;
+  } else if (result === 'lose') {
+    base = -20;
+    stats.l += 1;
+    stats.streak = 0;
     sndMiss();
   } else {
-    delta = 10;
-    msg = `🤝 ${you} : ${ai} 战平，积分 +10`;
+    base = 10;
+    stats.d += 1;
+    stats.streak = 0;
     sndMatch();
   }
-  const pts = Math.max(0, getRankPoints() + delta);
+  const delta = base + bonus;
+  const oldPts = getRankPoints();
+  const oldTier = rankTierOf(oldPts);
+  const pts = Math.max(0, oldPts + delta);
   localStorage.setItem('mem_rank_points', String(pts));
-  const tier = rankTierOf(pts);
-  if (tier.min > oldMin) msg += `，晋级 ${tier.icon}${tier.name}！`;
-  else if (tier.min < oldMin) msg += `，降级到 ${tier.icon}${tier.name}`;
+  stats.peak = Math.max(stats.peak, pts);
+  saveRankStats(stats);
+
+  const newTier = rankTierOf(pts);
+  const promoted = newTier.min > oldTier.min;
+  const demoted = newTier.min < oldTier.min;
+
   renderRankHud();
-  setRankMsg(msg, delta > 0 ? 'ok' : delta < 0 ? 'bad' : '');
-  /* 胜利波浪动画 */
-  [...$('rankGrid').children].forEach((el, i) => setTimeout(() => el.classList.add('wave'), i * 45));
+  let msg = result === 'win' ? `🎉 胜利 ${you} : ${ai}！积分 +${delta}`
+    : result === 'lose' ? `😭 惜败 ${you} : ${ai}，积分 ${delta}`
+    : `🤝 ${you} : ${ai} 战平，积分 +${delta}`;
+  if (promoted) msg += `，晋级 ${newTier.icon}${newTier.name}！`;
+  else if (demoted) msg += `，降级到 ${newTier.icon}${newTier.name}`;
+  setRankMsg(msg, delta > 0 ? 'ok' : 'bad');
+
+  /* 胜利波浪动画，随后弹出结算窗 */
+  [...$('rankGrid').children].forEach((el, i) => rank.timers.push(setTimeout(() => el.classList.add('wave'), i * 45)));
+  rank.timers.push(setTimeout(() => {
+    if (!rank) return;
+    showRankResult({ result, you, ai, delta, bonus, promoted, demoted, tier: newTier, stats });
+  }, 1150));
   renderBest();
+}
+
+function showRankResult({ result, you, ai, delta, bonus, promoted, demoted, tier, stats }) {
+  const card = $('rankResultCard');
+  card.className = 'rank-result-card ' + result + (promoted ? ' promote' : '');
+  $('rrIcon').textContent = result === 'win' ? (promoted ? '🏆' : '🎉') : result === 'lose' ? '😢' : '🤝';
+  $('rrTitle').textContent = result === 'win' ? (promoted ? '晋级胜利！' : '胜利！') : result === 'lose' ? '惜败' : '战平';
+  $('rrScore').textContent = `${you} : ${ai}`;
+  $('rrDelta').textContent = delta > 0 ? `+${delta} 积分` : `${delta} 积分`;
+  $('rrDelta').style.color = delta > 0 ? 'var(--right)' : 'var(--wrong)';
+  $('rrTier').textContent = promoted
+    ? `⬆ 晋级 ${tier.icon}${tier.name}！`
+    : demoted ? `⬇ 降级 ${tier.icon}${tier.name}` : '';
+  const total = stats.w + stats.d + stats.l;
+  const winRate = Math.round((stats.w / total) * 100);
+  let sub = `战绩 ${stats.w}胜 ${stats.d}平 ${stats.l}负 · 胜率 ${winRate}%`;
+  if (bonus > 0) sub += `　连胜奖励 +${bonus}`;
+  else if (stats.streak >= 2) sub += `　🔥 ${stats.streak} 连胜中`;
+  $('rrSub').textContent = sub;
+  $('rankResult').hidden = false;
 }
 
 $('rankRestart').addEventListener('click', newRank);
 $('rankBack').addEventListener('click', () => showView('home'));
+$('rrAgain').addEventListener('click', newRank);
+$('rrHome').addEventListener('click', () => {
+  $('rankResult').hidden = true;
+  showView('home');
+});
 
 /* ================= 入口 ================= */
 function stopAllGames() {
