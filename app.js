@@ -111,11 +111,13 @@ const views = ['home', 'flip', 'digit', 'simon', 'rank'];
 function showView(name) {
   stopAllGames();
   if (name !== 'friends') stopFriendPoll();
+  if (name !== 'world') stopWorld();
   document.querySelectorAll('main > section[id^="view-"]').forEach((s) => {
     s.hidden = s.id !== 'view-' + name;
   });
-  if (name === 'home') renderBest();
+  if (name === 'home') { renderBest(); worldReturn = false; }
   if (name === 'friends') { loadFriends(); startFriendPoll(); }
+  if (name === 'world') startWorld();
   window.scrollTo(0, 0);
 }
 
@@ -402,7 +404,7 @@ $('digitInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') submitDigit();
 });
 $('digitRestart').addEventListener('click', newDigit);
-$('digitBack').addEventListener('click', () => showView('home'));
+$('digitBack').addEventListener('click', backFromWorld);
 
 /* 数字显示时长设置（持久化到 localStorage） */
 const digitShowInput = $('digitShowSec');
@@ -993,7 +995,7 @@ function showRankResult({ result, you, ai, delta, bonus, coins, promoted, demote
 $('rankRestart').addEventListener('click', newRank);
 $('rankBack').addEventListener('click', () => {
   if (!$('pvpArea').hidden) pvpLeave(true);
-  showView('home');
+  backFromWorld();
 });
 $('useFreeze').addEventListener('click', useFreeze);
 $('usePeek').addEventListener('click', usePeek);
@@ -1416,7 +1418,7 @@ $('nickSave').addEventListener('click', saveNickname);
 
 /* 好友系统事件 */
 $('openFriends').addEventListener('click', () => showView('friends'));
-$('friendsBack').addEventListener('click', () => showView('home'));
+$('friendsBack').addEventListener('click', backFromWorld);
 $('tabFriendsList').addEventListener('click', () => showFriendsView('list'));
 $('tabFriendsAdd').addEventListener('click', () => showFriendsView('add'));
 $('tabFriendsReq').addEventListener('click', () => showFriendsView('req'));
@@ -1941,6 +1943,545 @@ function showFriendsView(tab) {
   $('tabFriendsReq').classList.toggle('active', tab === 'req');
 }
 
+/* ================= 大世界 · 记忆小镇 ================= */
+const WORLD_W = 1000;
+const WORLD_H = 680;
+const WORLD_AVATARS = ['🧑‍🎨', '🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '🥷', '🤖', '🐱', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯', '🐧'];
+
+/* 建筑（逻辑坐标 1000×680，view = 进入的功能视图） */
+const WORLD_BUILDINGS = [
+  { id: 'flip',    emoji: '🃏', name: '翻牌屋',     x: 60,  y: 80,  w: 140, h: 104, view: 'flip' },
+  { id: 'digit',   emoji: '🔢', name: '数字塔',     x: 300, y: 60,  w: 140, h: 104, view: 'digit' },
+  { id: 'simon',   emoji: '🎨', name: '彩灯广场',   x: 540, y: 80,  w: 140, h: 104, view: 'simon' },
+  { id: 'board',   emoji: '📊', name: '排行榜碑',   x: 790, y: 70,  w: 140, h: 104, view: 'board' },
+  { id: 'rank',    emoji: '🏆', name: '排位竞技场', x: 80,  y: 330, w: 160, h: 118, view: 'rank' },
+  { id: 'shop',    emoji: '🎁', name: '礼品商店',   x: 420, y: 350, w: 140, h: 104, view: 'shop' },
+  { id: 'friends', emoji: '👥', name: '好友之家',   x: 720, y: 340, w: 140, h: 104, view: 'friends' },
+];
+
+/* 碰撞体：建筑外扩一圈 + 中央喷泉 */
+const WORLD_SOLIDS = WORLD_BUILDINGS
+  .map((b) => ({ x: b.x - 16, y: b.y - 8, w: b.w + 32, h: b.h + 26 }))
+  .concat([{ x: 474, y: 486, w: 52, h: 48 }]);
+
+const WORLD_NPCS = [
+  {
+    id: 'guide', emoji: '🧙‍♀️', name: '向导梅梅', x: 392, y: 585,
+    text: '欢迎来到记忆小镇！用方向键（手机拖左下摇杆）走动，走近建筑点「进入」就能玩。镇里还有好多镇民在溜达，点他们可以聊天哦～',
+    btn: { label: '知道啦', act: 'close' },
+  },
+  {
+    id: 'judge', emoji: '⚖️', name: '裁判阿正', x: 285, y: 448,
+    text: '排位竞技场今天开门！赢一局 +30 积分、+50 金币，连胜还能升段位。要去和对手过过招吗？',
+    btn: { label: '🏆 去排位赛', act: 'view', view: 'rank' },
+  },
+  {
+    id: 'keeper', emoji: '🛒', name: '商店老板', x: 622, y: 452,
+    text: '新到了冻结卡和透视卡，排位赛里可好使了！看广告还能免费领提示，不来逛逛吗？',
+    btn: { label: '🎁 逛商店', act: 'view', view: 'shop' },
+  },
+];
+
+/* 机器人镇民（名字与排行榜种子呼应） */
+const WORLD_BOTS = [
+  { name: '记忆大师007', avatar: '🧙‍♂️', points: 1680 },
+  { name: '过目不忘', avatar: '🦸‍♀️', points: 1590 },
+  { name: '卡牌仙人', avatar: '🥷', points: 1320 },
+  { name: '闪电快手', avatar: '🐱', points: 1180 },
+  { name: '翻牌小天才', avatar: '🐰', points: 745 },
+  { name: '萌新玩家', avatar: '🐧', points: 180 },
+];
+
+const BOT_LINES = [
+  '我在这儿刷了一整天牌了，脑子快不够用啦！',
+  '听说排位竞技场赢一把给 50 金币，心动了没？',
+  '别光站着呀，去翻牌屋露两手？',
+  '数字塔顶层的数字有 12 位那么长，你敢挑战吗？',
+  '今天小镇来了好多新朋友，真热闹～',
+  '彩灯广场的灯光节奏，我已经能闭着眼复现了！',
+  '喷泉边风景好，我每天都来这儿散步。',
+];
+
+const WORLD_DECOS = [
+  { t: '🌳', x: 24, y: 30 }, { t: '🌳', x: 945, y: 40 }, { t: '🌲', x: 18, y: 300 },
+  { t: '🌲', x: 950, y: 290 }, { t: '🌻', x: 250, y: 220 }, { t: '🌻', x: 700, y: 225 },
+  { t: '🪨', x: 340, y: 250 }, { t: '🪨', x: 640, y: 265 }, { t: '⛲', x: 500, y: 512 },
+  { t: '🪧', x: 330, y: 628 }, { t: '🌷', x: 150, y: 610 }, { t: '🌷', x: 860, y: 610 },
+  { t: '🦋', x: 610, y: 180 }, { t: '🐦', x: 200, y: 150 },
+];
+
+/* ---- 角色形象（localStorage） ---- */
+function getAvatar() {
+  return localStorage.getItem('mem_avatar') || '🧑‍🎨';
+}
+function getWorldName() {
+  let n = localStorage.getItem('mem_world_name');
+  if (!n) {
+    n = '玩家' + Math.floor(1000 + Math.random() * 9000);
+    localStorage.setItem('mem_world_name', n);
+  }
+  return n;
+}
+
+/* ---- 世界运行状态 ---- */
+let worldReturn = false; /* 从世界进入游戏后，返回键回世界而非首页 */
+const world = {
+  running: false,
+  built: false,
+  me: { x: 500, y: 615, el: null },
+  keys: { up: false, down: false, left: false, right: false },
+  joy: { x: 0, y: 0 },
+  bots: [],
+  remotes: [],
+  moveTimer: null,
+  pollTimer: null,
+  lastBeat: 0,
+  nearId: null,
+};
+
+function wcClamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function hitsSolid(x, y) {
+  return WORLD_SOLIDS.some((s) => x > s.x && x < s.x + s.w && y > s.y && y < s.y + s.h);
+}
+
+function makeCharEl(cls, emoji, name) {
+  const el = document.createElement('div');
+  el.className = 'world-char ' + cls;
+  el.innerHTML = '<span class="wc-emoji"></span><span class="wc-name"></span>';
+  el.querySelector('.wc-emoji').textContent = emoji;
+  el.querySelector('.wc-name').textContent = name;
+  return el;
+}
+
+function placeChar(el, x, y) {
+  el.style.transform = `translate(${x}px, ${y}px)`;
+  el.style.zIndex = String(Math.round(y) + 5);
+}
+
+/* ---- 一次性构建世界 DOM ---- */
+function buildWorld() {
+  if (world.built) return;
+  world.built = true;
+  $('worldGround').innerHTML =
+    '<div class="world-path ph" style="top:560px"></div>' +
+    '<div class="world-path pv" style="left:500px"></div>' +
+    WORLD_DECOS.map((d) => `<span class="world-deco" style="left:${d.x}px;top:${d.y}px">${d.t}</span>`).join('');
+  $('worldBuildings').innerHTML = WORLD_BUILDINGS.map((b) =>
+    `<button class="world-building" id="wbld-${b.id}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px" data-view="${b.view}" type="button">
+      <span class="wb-emoji">${b.emoji}</span><span class="wb-name">${b.name}</span>
+    </button>`).join('');
+  $('worldBuildings').addEventListener('click', (e) => {
+    const btn = e.target.closest('.world-building');
+    if (btn) enterWorldView(btn.dataset.view);
+  });
+  /* 自己 */
+  world.me.el = makeCharEl('char-me', getAvatar(), getWorldName());
+  $('worldChars').appendChild(world.me.el);
+  placeChar(world.me.el, world.me.x, world.me.y);
+  /* NPC */
+  for (const n of WORLD_NPCS) {
+    const el = makeCharEl('char-npc', n.emoji, n.name);
+    el.dataset.npc = n.id;
+    $('worldChars').appendChild(el);
+    placeChar(el, n.x, n.y);
+  }
+  /* 机器人镇民 */
+  world.bots = WORLD_BOTS.map((d, i) => {
+    const b = { id: 'bot' + i, name: d.name, avatar: d.avatar, points: d.points, x: 500, y: 600, tx: 500, ty: 600, wait: 0, el: null };
+    b.el = makeCharEl('char-bot', d.avatar, d.name);
+    b.el.dataset.bot = b.id;
+    $('worldChars').appendChild(b.el);
+    pickBotTarget(b, true);
+    b.x = b.tx; b.y = b.ty;
+    placeChar(b.el, b.x, b.y);
+    return b;
+  });
+  /* 人物点击事件委托 */
+  $('worldChars').addEventListener('click', (e) => {
+    const c = e.target.closest('.world-char');
+    if (!c) return;
+    if (c.dataset.npc) {
+      const n = WORLD_NPCS.find((x) => x.id === c.dataset.npc);
+      if (n) openNpc(n);
+    } else if (c.dataset.bot) {
+      const b = world.bots.find((x) => x.id === c.dataset.bot);
+      if (b) openBot(b);
+    } else if (c.dataset.pid) {
+      const p = world.remotes.find((x) => x.id === c.dataset.pid);
+      if (p) openRemote(p);
+    }
+  });
+  bindJoystick();
+  window.addEventListener('resize', () => { if (world.running) fitWorld(); });
+}
+
+function fitWorld() {
+  const rect = $('worldWrap').getBoundingClientRect();
+  const scale = Math.min(rect.width / WORLD_W, rect.height / WORLD_H);
+  $('worldStage').style.transform = `translate(-50%, -50%) scale(${scale})`;
+}
+
+/* ---- 从世界进入功能视图 ---- */
+function enterWorldView(v) {
+  hideBubble();
+  worldReturn = true;
+  if (v === 'flip') { showView('flip'); newFlip(); }
+  else if (v === 'digit') { showView('digit'); newDigit(); }
+  else if (v === 'simon') { showView('simon'); newSimon(); }
+  else if (v === 'rank') { showView('rank'); newRank(); }
+  else if (v === 'shop') { showView('shop'); renderShop(); }
+  else if (v === 'board') { showView('board'); loadBoard(); }
+  else if (v === 'friends') { showView('friends'); }
+}
+
+/* 游戏页返回键：从世界进来的回世界，否则回首页 */
+function backFromWorld() {
+  const back = worldReturn;
+  worldReturn = false;
+  showView(back ? 'world' : 'home');
+}
+
+/* ---- 对话气泡 ---- */
+function hideBubble() { $('worldBubble').hidden = true; }
+function showBubble(x, y, innerHtml) {
+  const bub = $('worldBubble');
+  bub.innerHTML = innerHtml + '<button class="wbub-close" title="关闭" type="button">×</button>';
+  bub.style.left = wcClamp(x, 130, WORLD_W - 130) + 'px';
+  bub.style.top = (y - 10) + 'px';
+  bub.hidden = false;
+  bub.querySelector('.wbub-close').onclick = hideBubble;
+  const c2 = bub.querySelector('#wbubClose2');
+  if (c2) c2.onclick = hideBubble;
+  const go = bub.querySelector('[data-npcgo]');
+  if (go) go.onclick = () => enterWorldView(go.dataset.npcgo);
+  const ch = bub.querySelector('[data-challengep]');
+  if (ch) ch.onclick = () => sendWorldChallenge(ch.dataset.challengep, ch);
+}
+
+function openNpc(n) {
+  sndHint();
+  const btns = n.btn.act === 'view'
+    ? `<button class="btn small primary" data-npcgo="${n.btn.view}" type="button">${n.btn.label}</button>
+       <button class="btn small ghost" id="wbubClose2" type="button">以后再说</button>`
+    : `<button class="btn small primary" id="wbubClose2" type="button">${n.btn.label}</button>`;
+  showBubble(n.x, n.y - 62,
+    `<b>${n.emoji} ${escapeHtml(n.name)}</b><span class="wbub-text">${n.text}</span><div class="wbub-btns">${btns}</div>`);
+}
+
+function openBot(b) {
+  sndFlip();
+  const line = BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)];
+  const tier = rankTierOf(b.points);
+  showBubble(b.x, b.y - 62,
+    `<b>${b.avatar} ${escapeHtml(b.name)}</b><span class="wbub-text">「${line}」</span>
+     <div class="wbub-btns"><span class="wbub-rank">${tier.icon} ${b.points} 积分</span>
+     <button class="btn small ghost" id="wbubClose2" type="button">拜拜</button></div>`);
+}
+
+function openRemote(p) {
+  sndHint();
+  if (!p.isFriend) {
+    showBubble(p.x, p.y - 62,
+      `<b>${p.avatar} ${escapeHtml(p.name)}</b><span class="wbub-text">一位来自远方的旅人也在小镇闲逛。加为好友后，就可以随时发起翻牌挑战啦！</span>
+       <div class="wbub-btns"><button class="btn small ghost" id="wbubClose2" type="button">知道了</button></div>`);
+    return;
+  }
+  showBubble(p.x, p.y - 62,
+    `<b>👥 ${escapeHtml(p.name)}</b><span class="wbub-text">你的好友正在小镇里闲逛，要发起一局翻牌挑战吗？</span>
+     <div class="wbub-btns"><button class="btn small primary" data-challengep="${p.id}" type="button">⚔️ 挑战</button>
+     <button class="btn small ghost" id="wbubClose2" type="button">下次</button></div>`);
+}
+
+async function sendWorldChallenge(phone, btn) {
+  btn.disabled = true;
+  btn.textContent = '发送中…';
+  try {
+    const j = await friendPost('/api/friends/challenge', { phone });
+    if (j.ok) {
+      btn.textContent = '✅ 已发送';
+      btn.className = 'btn small ghost';
+      sndWin();
+    } else {
+      btn.disabled = false;
+      btn.textContent = '⚔️ 挑战';
+      sndMiss();
+      alert(j.error || '挑战发送失败');
+    }
+  } catch {
+    btn.disabled = false;
+    btn.textContent = '⚔️ 挑战';
+    sndMiss();
+    alert('无法连接服务器');
+  }
+}
+
+/* ---- 机器人镇民游走 ---- */
+function pickBotTarget(b, first) {
+  for (let tries = 0; tries < 24; tries++) {
+    const x = 70 + Math.random() * (WORLD_W - 140);
+    const y = 150 + Math.random() * (WORLD_H - 230);
+    if (!hitsSolid(x, y)) { b.tx = x; b.ty = y; break; }
+  }
+  b.wait = first ? 0 : 40 + Math.random() * 200;
+}
+
+function tickBot(b) {
+  const dx = b.tx - b.x;
+  const dy = b.ty - b.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 4) {
+    b.wait -= 1;
+    if (b.wait <= 0) pickBotTarget(b);
+    return;
+  }
+  const sp = 1.3;
+  const nx = b.x + dx / d * sp;
+  const ny = b.y + dy / d * sp;
+  if (!hitsSolid(nx, b.y)) b.x = nx; else b.tx = b.x;
+  if (!hitsSolid(b.x, ny)) b.y = ny; else b.ty = b.y;
+  placeChar(b.el, b.x, b.y);
+}
+
+/* ---- 在线玩家（后端在线时为真实好友/玩家；离线静默降级） ---- */
+function setWorldNet(online) {
+  $('worldNet').textContent = online
+    ? '🟢 已连接服务器：小镇里可能遇到真实好友'
+    : '🟡 离线模式：镇里是机器人镇民（连接服务器可见好友）';
+}
+
+async function worldPoll() {
+  if (!getToken()) { syncRemotes([]); setWorldNet(false); return; }
+  try {
+    const j = await friendGet('/api/world/players');
+    if (!j.ok) throw new Error('bad');
+    syncRemotes(j.players || []);
+    setWorldNet(true);
+  } catch {
+    syncRemotes([]);
+    setWorldNet(false);
+  }
+}
+
+function syncRemotes(players) {
+  world.remotes = players;
+  const layer = $('worldChars');
+  layer.querySelectorAll('.char-remote').forEach((el) => el.remove());
+  for (const p of players) {
+    const el = makeCharEl(
+      'char-remote ' + (p.isFriend ? 'char-friend' : 'char-guest'),
+      p.avatar || '🧑‍🎨',
+      (p.isFriend ? '👥 ' : '') + p.name
+    );
+    el.dataset.pid = p.id;
+    layer.appendChild(el);
+    placeChar(el, wcClamp(p.x, 24, WORLD_W - 24), wcClamp(p.y, 90, WORLD_H - 20));
+  }
+}
+
+/* 位置心跳：登录时约 1.2s 上报一次 */
+async function worldBeat(force) {
+  if (!getToken()) return;
+  const now = Date.now();
+  if (!force && now - world.lastBeat < 1200) return;
+  world.lastBeat = now;
+  try {
+    await friendPost('/api/world/presence', {
+      x: Math.round(world.me.x),
+      y: Math.round(world.me.y),
+      avatar: getAvatar(),
+    });
+  } catch { /* 离线静默 */ }
+}
+
+/* ---- 靠近建筑 / NPC 提示 ---- */
+function updatePrompt() {
+  let near = null;
+  for (const n of WORLD_NPCS) {
+    if ((n.x - world.me.x) ** 2 + (n.y - world.me.y) ** 2 < 70 * 70) { near = { kind: 'npc', ref: n }; break; }
+  }
+  if (!near) {
+    for (const b of WORLD_BUILDINGS) {
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      if ((cx - world.me.x) ** 2 + (cy - world.me.y) ** 2 < 120 * 120) { near = { kind: 'building', ref: b }; break; }
+    }
+  }
+  const nearId = near ? near.kind + ':' + near.ref.id : null;
+  WORLD_BUILDINGS.forEach((b) => {
+    const el = $('wbld-' + b.id);
+    if (el) el.classList.toggle('near', !!(near && near.kind === 'building' && near.ref.id === b.id));
+  });
+  if (nearId === world.nearId) return;
+  world.nearId = nearId;
+  const p = $('worldPrompt');
+  if (!near) { p.hidden = true; return; }
+  if (near.kind === 'npc') {
+    p.innerHTML = `<span>💬 ${near.ref.name} 想和你聊聊</span><button class="btn small primary" type="button">聊聊</button>`;
+    p.querySelector('button').onclick = () => openNpc(near.ref);
+  } else {
+    p.innerHTML = `<span>${near.ref.emoji} ${near.ref.name}</span><button class="btn small primary" type="button">进入</button>`;
+    p.querySelector('button').onclick = () => enterWorldView(near.ref.view);
+  }
+  p.hidden = false;
+}
+
+/* ---- 移动循环（50ms） ---- */
+function worldTick() {
+  if (!world.running) return;
+  const sp = 3.4;
+  let dx = (world.keys.right ? 1 : 0) - (world.keys.left ? 1 : 0) + world.joy.x;
+  let dy = (world.keys.down ? 1 : 0) - (world.keys.up ? 1 : 0) + world.joy.y;
+  const len = Math.hypot(dx, dy);
+  if (len > 0.15) {
+    if (len > 1) { dx /= len; dy /= len; }
+    const nx = wcClamp(world.me.x + dx * sp, 26, WORLD_W - 26);
+    const ny = wcClamp(world.me.y + dy * sp, 90, WORLD_H - 18);
+    if (!hitsSolid(nx, world.me.y)) world.me.x = nx;
+    if (!hitsSolid(world.me.x, ny)) world.me.y = ny;
+    placeChar(world.me.el, world.me.x, world.me.y);
+    updatePrompt();
+    worldBeat(false);
+  }
+  for (const b of world.bots) tickBot(b);
+}
+
+function onWorldKey(e) {
+  if ($('charOverlay') && !$('charOverlay').hidden) return; /* 角色弹窗打开时不抢按键 */
+  const k = e.key.toLowerCase();
+  const map = { arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down', arrowleft: 'left', a: 'left', d: 'right' };
+  const dir = map[k];
+  if (dir) {
+    world.keys[dir] = e.type === 'keydown';
+    e.preventDefault();
+  }
+}
+
+/* ---- 手机虚拟摇杆 ---- */
+function bindJoystick() {
+  const pad = $('worldJoystick');
+  const knob = $('wjKnob');
+  let active = false;
+  let cx = 0;
+  let cy = 0;
+  const MAX = 30;
+  const setKnob = (dx, dy) => { knob.style.transform = `translate(${dx}px, ${dy}px)`; };
+  const pt = (e) => (e.touches ? e.touches[0] : e);
+  const start = (e) => {
+    active = true;
+    const t = pt(e);
+    const r = pad.getBoundingClientRect();
+    cx = r.left + r.width / 2;
+    cy = r.top + r.height / 2;
+    move(e);
+  };
+  const move = (e) => {
+    if (!active) return;
+    if (e.cancelable) e.preventDefault();
+    const t = pt(e);
+    let dx = t.clientX - cx;
+    let dy = t.clientY - cy;
+    const d = Math.hypot(dx, dy);
+    if (d > MAX) { dx = dx / d * MAX; dy = dy / d * MAX; }
+    setKnob(dx, dy);
+    world.joy.x = dx / MAX;
+    world.joy.y = dy / MAX;
+  };
+  const end = () => {
+    active = false;
+    world.joy.x = 0;
+    world.joy.y = 0;
+    setKnob(0, 0);
+  };
+  pad.addEventListener('touchstart', start, { passive: false });
+  pad.addEventListener('touchmove', move, { passive: false });
+  pad.addEventListener('touchend', end);
+  pad.addEventListener('touchcancel', end);
+  pad.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+}
+
+/* ---- 世界生命周期 ---- */
+function startWorld() {
+  buildWorld();
+  fitWorld();
+  world.running = true;
+  /* 刷新形象（可能在角色弹窗改过） */
+  world.me.el.querySelector('.wc-emoji').textContent = getAvatar();
+  world.me.el.querySelector('.wc-name').textContent = getWorldName();
+  placeChar(world.me.el, world.me.x, world.me.y);
+  window.addEventListener('keydown', onWorldKey);
+  window.addEventListener('keyup', onWorldKey);
+  world.moveTimer = setInterval(worldTick, 50);
+  world.pollTimer = setInterval(worldPoll, 2000);
+  world.nearId = null;
+  updatePrompt();
+  worldBeat(true);
+  worldPoll();
+  if (!localStorage.getItem('mem_avatar')) openCharEditor();
+}
+
+function stopWorld() {
+  world.running = false;
+  if (world.moveTimer) { clearInterval(world.moveTimer); world.moveTimer = null; }
+  if (world.pollTimer) { clearInterval(world.pollTimer); world.pollTimer = null; }
+  window.removeEventListener('keydown', onWorldKey);
+  window.removeEventListener('keyup', onWorldKey);
+  world.keys = { up: false, down: false, left: false, right: false };
+  world.joy.x = 0;
+  world.joy.y = 0;
+  hideBubble();
+  $('worldPrompt').hidden = true;
+  WORLD_BUILDINGS.forEach((b) => {
+    const el = $('wbld-' + b.id);
+    if (el) el.classList.remove('near');
+  });
+}
+
+/* ---- 角色创建 / 形象弹窗 ---- */
+let charSel = '🧑‍🎨';
+function openCharEditor() {
+  charSel = getAvatar();
+  const grid = $('charAvatarGrid');
+  grid.innerHTML = WORLD_AVATARS.map((a) =>
+    `<button data-av="${a}" class="${a === charSel ? 'sel' : ''}" type="button">${a}</button>`).join('');
+  $('charPreview').textContent = charSel;
+  $('charNameInput').value = getWorldName();
+  $('charOverlay').hidden = false;
+  grid.onclick = (e) => {
+    const btn = e.target.closest('[data-av]');
+    if (!btn) return;
+    charSel = btn.dataset.av;
+    $('charPreview').textContent = charSel;
+    grid.querySelectorAll('button').forEach((b) => b.classList.toggle('sel', b.dataset.av === charSel));
+    sndFlip();
+  };
+}
+
+function saveChar() {
+  const name = ($('charNameInput').value || '').replace(/[<>&"'`]/g, '').trim().slice(0, 12)
+    || ('玩家' + Math.floor(1000 + Math.random() * 9000));
+  localStorage.setItem('mem_avatar', charSel);
+  localStorage.setItem('mem_world_name', name);
+  $('charOverlay').hidden = true;
+  if (world.me.el) {
+    world.me.el.querySelector('.wc-emoji').textContent = charSel;
+    world.me.el.querySelector('.wc-name').textContent = name;
+  }
+  sndWin();
+  worldBeat(true);
+}
+
+$('charSave').addEventListener('click', saveChar);
+$('charClose').addEventListener('click', () => {
+  if (!localStorage.getItem('mem_avatar')) saveChar(); /* 首次直接关闭也保存默认形象，不再反复弹 */
+  else $('charOverlay').hidden = true;
+});
+$('worldCharBtn').addEventListener('click', openCharEditor);
+$('worldBack').addEventListener('click', () => showView('home'));
+$('openWorld').addEventListener('click', () => showView('world'));
+
 /* ================= 激励广告（模拟，每日限 3 次） ================= */
 /* 真实环境替换为 AdSense/穿山甲/微信广告 SDK 的 rewarded video，
    在 onClose(isCompleted) 回调里发奖即可。 */
@@ -2058,6 +2599,7 @@ function renderUser() {
   if (p) {
     btn.classList.add('logged');
     $('userLabel').textContent = maskPhone(p);
+    $('acctAvatar').textContent = getAvatar();
   } else {
     btn.classList.remove('logged');
     $('userLabel').textContent = '登录';

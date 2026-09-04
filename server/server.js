@@ -95,6 +95,12 @@ function isOnline(phone) {
 const pvpChallenges = new Map();
 let challengeSeq = 0;
 
+/* ---------------- 大世界：在线位置（内存态，15 秒无心跳即离开） ---------------- */
+const WORLD_W = 1000;
+const WORLD_H = 680;
+const WORLD_AVATARS = ['🧑‍🎨', '🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '🥷', '🤖', '🐱', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯', '🐧'];
+const worldPresence = new Map(); /* phone -> { x, y, avatar, name, at } */
+
 /* 合并机器人与真人成绩，按积分降序（同积分按胜场），返回 Top50 */
 function buildLeaderboard() {
   const scores = loadScores();
@@ -472,6 +478,14 @@ setInterval(() => {
     }
   }
 }, 10000);
+
+/* 定时清理大世界过期位置（15s 无心跳判定离开小镇） */
+setInterval(() => {
+  const now = Date.now();
+  for (const [ph, pos] of worldPresence) {
+    if (now - pos.at > 15000) worldPresence.delete(ph);
+  }
+}, 5000);
 
 function findRoomByToken(token) {
   for (const room of pvpRooms.values()) {
@@ -910,6 +924,51 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       return json(res, 500, { ok: false, error: e.message });
     }
+  }
+
+  /* ===== 大世界 ===== */
+
+  /* 上报世界位置/形象（客户端约 1.2s 一次心跳；坐标服务端钳制，avatar 白名单校验） */
+  if (p === '/api/world/presence' && req.method === 'POST') {
+    try {
+      const token = req.headers['x-auth-token'];
+      const phone = phoneByToken(token);
+      if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const x = Math.max(0, Math.min(WORLD_W, Math.round(Number(body.x)) || 0));
+      const y = Math.max(0, Math.min(WORLD_H, Math.round(Number(body.y)) || 0));
+      let avatar = String(body.avatar || '').slice(0, 8);
+      if (!WORLD_AVATARS.includes(avatar)) avatar = '🧑‍🎨';
+      worldPresence.set(phone, { x, y, avatar, name: nicknameOf(phone), at: Date.now() });
+      lastSeen.set(phone, Date.now());
+      return json(res, 200, { ok: true });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  /* 获取小镇里的在线玩家（排除自己；好友打标；15s 内心跳有效） */
+  if (p === '/api/world/players' && req.method === 'GET') {
+    const token = u.searchParams.get('token') || req.headers['x-auth-token'];
+    const phone = phoneByToken(token);
+    if (!phone) return json(res, 401, { ok: false, error: '请先登录' });
+    lastSeen.set(phone, Date.now());
+    const now = Date.now();
+    const entry = getFriendEntry(phone);
+    const players = [];
+    for (const [ph, pos] of worldPresence) {
+      if (ph === phone) continue;
+      if (now - pos.at > 15000) continue;
+      players.push({
+        id: ph,
+        name: pos.name || nicknameOf(ph),
+        avatar: WORLD_AVATARS.includes(pos.avatar) ? pos.avatar : '🧑‍🎨',
+        x: pos.x,
+        y: pos.y,
+        isFriend: entry.friends.includes(ph),
+      });
+    }
+    return json(res, 200, { ok: true, players });
   }
 
   /* 定时清理过期的对战邀请已在 PvP 模块中注册 */

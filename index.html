@@ -27,6 +27,12 @@
     <!-- ========== 首页 ========== -->
     <section id="view-home">
       <div class="game-grid">
+        <button class="game-card world-entry" id="openWorld">
+          <span class="game-emoji">🌍</span>
+          <b>大世界 · 记忆小镇</b>
+          <span class="game-desc">走进小镇自由走动：进建筑玩游戏、和镇民聊天、偶遇好友</span>
+          <span class="best"><em class="new-badge">NEW</em> 新开放</span>
+        </button>
         <button class="game-card" id="openFlip">
           <span class="game-emoji">🃏</span>
           <b>翻牌配对</b>
@@ -350,6 +356,29 @@
         <div class="friends-list" id="friendsReqList"></div>
       </div>
     </section>
+
+    <!-- ========== 大世界 · 记忆小镇 ========== -->
+    <section id="view-world" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="worldBack">← 返回</button>
+        <div class="game-title">🌍 记忆小镇</div>
+        <button class="btn small ghost" id="worldCharBtn">👤 形象</button>
+      </div>
+      <div class="world-wrap" id="worldWrap">
+        <div class="world-stage" id="worldStage">
+          <div class="world-ground" id="worldGround"></div>
+          <div class="world-layer" id="worldBuildings"></div>
+          <div class="world-layer" id="worldChars"></div>
+          <div class="world-bubble" id="worldBubble" hidden></div>
+        </div>
+        <div class="world-net" id="worldNet">🟡 离线模式：镇里是机器人镇民</div>
+        <div class="world-prompt" id="worldPrompt" hidden></div>
+        <div class="world-joystick" id="worldJoystick">
+          <div class="wj-knob" id="wjKnob"></div>
+        </div>
+      </div>
+      <p class="world-tip">🕹️ 电脑用方向键 / WASD 移动，手机拖动左下摇杆；走近建筑点「进入」，点镇民可以聊天</p>
+    </section>
   </main>
 
   <!-- ========== 排位赛结算弹窗 ========== -->
@@ -420,6 +449,19 @@
         <p class="login-sub" id="acctTip">已登录，数据保存在本机</p>
         <button class="btn ghost login-submit" id="loginLogout">退出登录</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ========== 角色创建/形象弹窗 ========== -->
+  <div class="char-overlay" id="charOverlay" hidden>
+    <div class="char-card">
+      <button class="login-close" id="charClose" title="关闭">×</button>
+      <div class="login-title">🧑‍🎨 创建你的形象</div>
+      <p class="login-sub">在记忆小镇里，大家会看到你的样子和昵称</p>
+      <div class="char-preview" id="charPreview">🧑‍🎨</div>
+      <div class="char-avatar-grid" id="charAvatarGrid"></div>
+      <input type="text" id="charNameInput" class="login-input" maxlength="12" placeholder="取个昵称（最多12字）" autocomplete="off" />
+      <button class="btn primary login-submit" id="charSave">保存形象</button>
     </div>
   </div>
 
