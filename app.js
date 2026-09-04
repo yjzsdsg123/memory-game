@@ -130,6 +130,7 @@ function renderBest() {
   const rp = getRankPoints();
   const rt = rankTierOf(rp);
   $('bestRank').textContent = `段位：${rt.icon}${rt.name} · ${rp}分`;
+  $('bestShop').textContent = `🪙 ${getCoins()} 金币`;
 }
 
 /* ================= 翻牌配对 ================= */
@@ -842,22 +843,25 @@ function settleRank() {
   /* ===== 集中更新：积分、战绩、连胜、峰值（单一状态出口） ===== */
   const stats = getRankStats();
   const oldStreak = stats.streak;
-  let base, bonus = 0;
+  let base, bonus = 0, coinsEarned;
   if (result === 'win') {
     base = 30;
     /* 连胜奖励：第 2 场连胜起每场 +5，封顶 +25 */
     bonus = oldStreak >= 1 ? Math.min(oldStreak, 5) * 5 : 0;
+    coinsEarned = 50;
     stats.w += 1;
     stats.streak = oldStreak + 1;
     stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
     sndWin();
   } else if (result === 'lose') {
     base = -20;
+    coinsEarned = 10;
     stats.l += 1;
     stats.streak = 0;
     sndMiss();
   } else {
     base = 10;
+    coinsEarned = 20;
     stats.d += 1;
     stats.streak = 0;
     sndMatch();
@@ -869,6 +873,8 @@ function settleRank() {
   localStorage.setItem('mem_rank_points', String(pts));
   stats.peak = Math.max(stats.peak, pts);
   saveRankStats(stats);
+  addCoins(coinsEarned);
+  renderCoins(true);
 
   const newTier = rankTierOf(pts);
   const promoted = newTier.min > oldTier.min;
@@ -886,12 +892,12 @@ function settleRank() {
   [...$('rankGrid').children].forEach((el, i) => rank.timers.push(setTimeout(() => el.classList.add('wave'), i * 45)));
   rank.timers.push(setTimeout(() => {
     if (!rank) return;
-    showRankResult({ result, you, ai, delta, bonus, promoted, demoted, tier: newTier, stats });
+    showRankResult({ result, you, ai, delta, bonus, coins: coinsEarned, promoted, demoted, tier: newTier, stats });
   }, 1150));
   renderBest();
 }
 
-function showRankResult({ result, you, ai, delta, bonus, promoted, demoted, tier, stats }) {
+function showRankResult({ result, you, ai, delta, bonus, coins, promoted, demoted, tier, stats }) {
   const card = $('rankResultCard');
   card.className = 'rank-result-card ' + result + (promoted ? ' promote' : '');
   $('rrIcon').textContent = result === 'win' ? (promoted ? '🏆' : '🎉') : result === 'lose' ? '😢' : '🤝';
@@ -899,6 +905,7 @@ function showRankResult({ result, you, ai, delta, bonus, promoted, demoted, tier
   $('rrScore').textContent = `${you} : ${ai}`;
   $('rrDelta').textContent = delta > 0 ? `+${delta} 积分` : `${delta} 积分`;
   $('rrDelta').style.color = delta > 0 ? 'var(--right)' : 'var(--wrong)';
+  $('rrCoins').textContent = `🪙 +${coins} 金币`;
   $('rrTier').textContent = promoted
     ? `⬆ 晋级 ${tier.icon}${tier.name}！`
     : demoted ? `⬇ 降级 ${tier.icon}${tier.name}` : '';
@@ -918,6 +925,114 @@ $('rrHome').addEventListener('click', () => {
   $('rankResult').hidden = true;
   showView('home');
 });
+
+/* ================= 金币 & 装饰商店 ================= */
+const CARDBACKS = [
+  { id: 'default', name: '经典紫', symbol: '?', price: 0, desc: '最初的记忆卡背' },
+  { id: 'starry', name: '星空', symbol: '⭐', price: 100, desc: '深邃夜空中的点点繁星' },
+  { id: 'flame', name: '烈焰', symbol: '🔥', price: 150, desc: '燃烧吧，记忆之火' },
+  { id: 'ocean', name: '海洋', symbol: '🌊', price: 150, desc: '清凉深邃的蓝色波涛' },
+  { id: 'forest', name: '森林', symbol: '🌿', price: 200, desc: '生机勃勃的翠绿林间' },
+  { id: 'neon', name: '霓虹', symbol: '💠', price: 300, desc: '赛博都市的炫彩灯光' },
+  { id: 'rainbow', name: '彩虹', symbol: '🌈', price: 400, desc: '雨后天空的七色光芒' },
+  { id: 'gold', name: '王者金', symbol: '👑', price: 800, desc: '最强王者的专属荣耀' },
+];
+
+function getCoins() {
+  return Number(localStorage.getItem('mem_coins')) || 0;
+}
+
+function addCoins(n) {
+  const c = Math.max(0, getCoins() + n);
+  localStorage.setItem('mem_coins', String(c));
+  return c;
+}
+
+function getOwnedBacks() {
+  try {
+    const arr = JSON.parse(localStorage.getItem('mem_owned_backs'));
+    return Array.isArray(arr) && arr.length ? arr : ['default'];
+  } catch {
+    return ['default'];
+  }
+}
+
+function getCardback() {
+  return localStorage.getItem('mem_cardback') || 'default';
+}
+
+function setCardback(id) {
+  localStorage.setItem('mem_cardback', id);
+  document.body.dataset.cardback = id;
+}
+
+function renderCoins(pop) {
+  const c = getCoins();
+  $('navCoins').textContent = c;
+  $('shopCoins').textContent = c;
+  $('bestShop').textContent = `🪙 ${c} 金币`;
+  if (pop) {
+    document.querySelectorAll('.coins-pill').forEach((el) => {
+      el.classList.remove('coin-pop');
+      void el.offsetWidth;
+      el.classList.add('coin-pop');
+    });
+  }
+}
+
+function renderShop() {
+  const grid = $('shopGrid');
+  const coins = getCoins();
+  const owned = getOwnedBacks();
+  const equipped = getCardback();
+  grid.innerHTML = '';
+  CARDBACKS.forEach((item) => {
+    const isOwned = owned.includes(item.id);
+    const isEquipped = equipped === item.id;
+    const div = document.createElement('div');
+    div.className = 'shop-item' + (isEquipped ? ' equipped' : '');
+    div.innerHTML = `
+      <div class="shop-preview cb-${item.id}">${item.symbol}</div>
+      <b>${item.name}</b>
+      <span class="shop-desc">${item.desc}</span>
+      <button class="shop-buy"></button>`;
+    const btn = div.querySelector('.shop-buy');
+    if (isEquipped) {
+      btn.textContent = '✓ 已装备';
+      btn.disabled = true;
+    } else if (isOwned) {
+      btn.textContent = '装备';
+      btn.classList.add('owned');
+    } else if (coins >= item.price) {
+      btn.textContent = `🪙 ${item.price} 购买`;
+    } else {
+      btn.textContent = `🪙 ${item.price}（不足）`;
+      btn.classList.add('poor');
+      btn.disabled = true;
+    }
+    btn.addEventListener('click', () => buyOrEquip(item));
+    grid.appendChild(div);
+  });
+}
+
+function buyOrEquip(item) {
+  const owned = getOwnedBacks();
+  if (!owned.includes(item.id)) {
+    if (getCoins() < item.price) {
+      sndMiss();
+      return;
+    }
+    addCoins(-item.price);
+    owned.push(item.id);
+    localStorage.setItem('mem_owned_backs', JSON.stringify(owned));
+    sndWin();
+  } else {
+    sndMatch();
+  }
+  setCardback(item.id);
+  renderCoins(true);
+  renderShop();
+}
 
 /* ================= 入口 ================= */
 function stopAllGames() {
@@ -943,8 +1058,20 @@ $('openRank').addEventListener('click', () => {
   showView('rank');
   newRank();
 });
+$('openShop').addEventListener('click', () => {
+  showView('shop');
+  renderShop();
+});
+$('coinsBtn').addEventListener('click', () => {
+  showView('shop');
+  renderShop();
+});
+$('shopBack').addEventListener('click', () => showView('home'));
 $('navLogo').addEventListener('click', () => showView('home'));
 
+/* 初始化：应用已装备的卡背 + 金币显示 */
+document.body.dataset.cardback = getCardback();
+renderCoins();
 renderBest();
 
 /* PWA：仅 HTTP(S) 环境注册 Service Worker（双击 file:// 打开不受影响） */

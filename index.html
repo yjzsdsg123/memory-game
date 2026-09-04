@@ -14,6 +14,7 @@
   <nav class="navbar">
     <div class="nav-inner">
       <div class="logo" id="navLogo">🧠 记忆力挑战</div>
+      <button id="coinsBtn" class="coins-pill" title="金币商店">🪙 <b id="navCoins">0</b></button>
       <button id="soundToggle" class="theme-btn" title="切换音效">🔊</button>
       <button id="themeToggle" class="theme-btn" title="切换主题">🌙</button>
     </div>
@@ -46,6 +47,12 @@
           <b>排位赛</b>
           <span class="game-desc">人机对战翻牌，赢积分升段位</span>
           <span class="best" id="bestRank">段位：🥉青铜 · 0分</span>
+        </button>
+        <button class="game-card" id="openShop">
+          <span class="game-emoji">🎁</span>
+          <b>装饰商店</b>
+          <span class="game-desc">排位赛赚金币，购买精美卡背</span>
+          <span class="best" id="bestShop">🪙 0 金币</span>
         </button>
       </div>
       <p class="tip">每天几分钟，锻炼工作记忆与专注力 ✨ 数据保存在本地浏览器</p>
@@ -161,6 +168,17 @@
       <div class="flip-grid" id="rankGrid"></div>
       <div class="game-msg" id="rankMsg"></div>
     </section>
+
+    <!-- ========== 装饰商店 ========== -->
+    <section id="view-shop" hidden>
+      <div class="game-head">
+        <button class="back-btn" id="shopBack">← 返回</button>
+        <div class="game-title">🎁 装饰商店</div>
+        <div class="coins-pill static">🪙 <b id="shopCoins">0</b></div>
+      </div>
+      <p class="shop-tip">参加排位赛即可赚取金币（胜 +50 / 平 +20 / 负 +10），购买的卡背在翻牌配对和排位赛中全局生效</p>
+      <div class="shop-grid" id="shopGrid"></div>
+    </section>
   </main>
 
   <!-- ========== 排位赛结算弹窗 ========== -->
@@ -170,6 +188,7 @@
       <div class="rank-result-title" id="rrTitle">胜利</div>
       <div class="rank-result-score" id="rrScore">8 : 2</div>
       <div class="rank-result-delta" id="rrDelta">+30 积分</div>
+      <div class="rank-result-coins" id="rrCoins"></div>
       <div class="rank-result-tier" id="rrTier"></div>
       <div class="rank-result-sub" id="rrSub"></div>
       <div class="rank-result-actions">
