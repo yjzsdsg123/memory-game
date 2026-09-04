@@ -270,11 +270,24 @@
       <!-- 步骤2：扫码/支付中 -->
       <div class="pay-step" id="payStepQr" hidden>
         <div class="pay-title" id="payQrTitle">扫码支付</div>
+        <!-- 真实二维码（微信/支付宝 code_url） -->
+        <div class="pay-qr pay-qr-img-box" id="payQrImgBox" hidden>
+          <img id="payQrImg" alt="支付二维码" />
+        </div>
+        <!-- 演示用模拟图案 -->
         <div class="pay-qr" id="payQrBox">
           <div class="pay-qr-pattern"></div>
           <div class="pay-qr-logo" id="payQrLogo">💚</div>
         </div>
-        <div class="pay-qr-hint">请使用 <b id="payMethodName">微信</b> 扫一扫<br/>（演示环境，<span class="pay-fake-link" id="payFakeLink">点此模拟支付成功</span>）</div>
+        <!-- 沙盒收银台入口 -->
+        <a class="pay-cashier-btn" id="payCashier" href="#" target="_blank" rel="noopener" hidden>🧾 打开收银台完成支付</a>
+        <div class="pay-qr-hint" id="payQrHint">请使用 <b id="payMethodName">微信</b> 扫一扫</div>
+        <div class="pay-polling" id="payPolling">⏳ 正在等待支付结果…</div>
+        <!-- 后端不可达时的演示降级 -->
+        <div class="pay-demo-fallback" id="payDemoFallback" hidden>
+          <div class="pay-demo-line">支付后端未连接，进入演示模式</div>
+          <span class="pay-fake-link" id="payFakeLink">点此模拟支付成功</span>
+        </div>
       </div>
       <!-- 步骤3：支付成功 -->
       <div class="pay-step" id="payStepDone" hidden>

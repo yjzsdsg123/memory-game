@@ -1296,31 +1296,160 @@ function openPay(pkg) {
   sndFlip();
 }
 
-function closePay() {
-  $('payOverlay').hidden = true;
-  pendingRecharge = null;
+/* ================= 现金充值（真实支付后端 + 演示降级） ================= */
+/* PAY_API_BASE：支付后端地址。
+   - 本地联调：http://localhost:8080（运行 server/server.js）
+   - 正式上线：https://你的后端域名
+   后端不可达时自动降级为纯前端演示支付（不扣款）。 */
+const PAY_API_BASE = 'http://localhost:8080';
+
+let payPollTimer = null;
+let payOrderNo = null;
+
+function stopPayPoll() {
+  if (payPollTimer) {
+    clearInterval(payPollTimer);
+    payPollTimer = null;
+  }
 }
 
-/* 选择支付方式 -> 显示扫码步骤 */
-function choosePay(method) {
+/* 已兑换订单（防重复发奖，同一订单只加一次金币） */
+function isOrderRedeemed(orderNo) {
+  try {
+    return (JSON.parse(localStorage.getItem('mem_redeemed')) || []).includes(orderNo);
+  } catch {
+    return false;
+  }
+}
+
+function markOrderRedeemed(orderNo) {
+  let list = [];
+  try {
+    list = JSON.parse(localStorage.getItem('mem_redeemed')) || [];
+  } catch {
+    list = [];
+  }
+  if (!list.includes(orderNo)) {
+    list.push(orderNo);
+    localStorage.setItem('mem_redeemed', JSON.stringify(list.slice(-200)));
+  }
+}
+
+function closePay() {
+  stopPayPoll();
+  $('payOverlay').hidden = true;
+  pendingRecharge = null;
+  payOrderNo = null;
+}
+
+/* 支付成功统一到账入口 */
+function grantPaidCoins(orderNo, coins) {
+  stopPayPoll();
+  payOrderNo = null;
+  if (orderNo && isOrderRedeemed(orderNo)) {
+    showPayStep('Done');
+    return;
+  }
+  if (orderNo) markOrderRedeemed(orderNo);
+  addCoins(coins);
+  $('payDoneCoins').textContent = coins;
+  showPayStep('Done');
+  renderCoins(true);
+  renderShop();
+  sndWin();
+}
+
+/* 选择支付方式：请求后端下单；失败则降级演示模式 */
+async function choosePay(method) {
+  if (!pendingRecharge) return;
   const isWechat = method === 'wechat';
   $('payMethodName').textContent = isWechat ? '微信' : '支付宝';
   $('payQrLogo').textContent = isWechat ? '💚' : '💙';
   $('payQrTitle').textContent = isWechat ? '微信扫码支付' : '支付宝扫码支付';
   showPayStep('Qr');
   sndMatch();
+
+  /* 先重置扫码步骤元素 */
+  $('payQrImgBox').hidden = true;
+  $('payCashier').hidden = true;
+  $('payPolling').hidden = true;
+  $('payDemoFallback').hidden = true;
+  $('payQrBox').hidden = false;
+  $('payQrHint').innerHTML = '请使用 <b>' + (isWechat ? '微信' : '支付宝') + '</b> 扫一扫';
+
+  let data;
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 6000);
+    const r = await fetch(PAY_API_BASE + '/api/pay/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pkgId: pendingRecharge.id, method }),
+      signal: ctrl.signal,
+    });
+    data = await r.json();
+    if (!data.ok) throw new Error(data.error || '下单失败');
+  } catch (e) {
+    /* 后端不可达：降级为演示模式 */
+    $('payQrBox').hidden = false;
+    $('payDemoFallback').hidden = false;
+    $('payPolling').hidden = true;
+    return;
+  }
+
+  const coins = pendingRecharge.coins + pendingRecharge.bonus;
+
+  if (data.payMode === 'sandbox') {
+    /* 沙盒：显示模拟收银台按钮，后端轮询 */
+    $('payQrBox').hidden = true;
+    $('payCashier').hidden = false;
+    $('payCashier').href = data.cashierUrl;
+    $('payPolling').hidden = false;
+    $('payQrHint').innerHTML = '点击下方按钮打开收银台<br/>完成支付后自动到账';
+    payOrderNo = data.orderNo;
+    startPayPoll(data.orderNo, coins);
+  } else if (data.codeUrl) {
+    /* 真实模式：展示 code_url 二维码并轮询 */
+    $('payQrBox').hidden = true;
+    $('payQrImgBox').hidden = false;
+    $('payQrImg').src =
+      'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=' +
+      encodeURIComponent(data.codeUrl);
+    $('payPolling').hidden = false;
+    payOrderNo = data.orderNo;
+    startPayPoll(data.orderNo, coins);
+  }
 }
 
-/* 模拟支付成功（真实环境此函数由支付回调触发） */
+/* 轮询订单状态（每 1.5s，最长 5 分钟） */
+function startPayPoll(orderNo, coins) {
+  stopPayPoll();
+  let ticks = 0;
+  payPollTimer = setInterval(async () => {
+    ticks += 1;
+    if (ticks > 200) {
+      stopPayPoll();
+      $('payPolling').textContent = '⌛ 支付超时，请稍后在商店刷新查看';
+      return;
+    }
+    try {
+      const r = await fetch(PAY_API_BASE + '/api/pay/query?orderNo=' + orderNo);
+      const j = await r.json();
+      if (j.ok && j.status === 'PAID') {
+        $('payPolling').textContent = '✅ 支付成功，正在到账…';
+        grantPaidCoins(orderNo, coins);
+      }
+    } catch {
+      /* 轮询期间网络抖动忽略，继续重试 */
+    }
+  }, 1500);
+}
+
+/* 演示降级：模拟支付成功（后端未连接时） */
 function fakePay() {
   if (!pendingRecharge) return;
   const total = pendingRecharge.coins + pendingRecharge.bonus;
-  addCoins(total);
-  $('payDoneCoins').textContent = total;
-  showPayStep('Done');
-  renderCoins(true);
-  renderShop();
-  sndWin();
+  grantPaidCoins(null, total);
 }
 
 $('openRecharge').addEventListener('click', () => {
