@@ -143,6 +143,7 @@ function newFlip() {
   stopFlip();
   const deck = shuffle([...FLIP_EMOJIS, ...FLIP_EMOJIS]).map((e, i) => ({ e, done: false, open: false }));
   flip = { deck, open: [], matched: 0, moves: 0, startTs: null, timerId: null, lock: false, hints: 3 };
+  ensureHints();
   $('flipMoves').textContent = '0';
   $('flipTime').textContent = '00:00';
   $('flipMatched').textContent = '0/8';
@@ -270,12 +271,13 @@ function setFlipMsg(text, cls) {
 const flipHintBtn = $('flipHint');
 
 function updateFlipHintBtn() {
-  flipHintBtn.textContent = `提示（${flip ? flip.hints : 0}）`;
-  flipHintBtn.disabled = !flip || flip.hints <= 0;
+  const h = getHints();
+  flipHintBtn.textContent = `提示（${h}）`;
+  flipHintBtn.disabled = !flip || h <= 0;
 }
 
 function useFlipHint() {
-  if (!flip || flip.lock || flip.hints <= 0) return;
+  if (!flip || flip.lock || getHints() <= 0) return;
   const pool = flip.deck.map((c, i) => ({ c, i })).filter((x) => !x.c.done && !x.c.open);
   let pair = null;
   /* 优先：当前已翻开一张时，亮出它的另一半 */
@@ -291,7 +293,7 @@ function useFlipHint() {
     if (group) pair = [group[0], group[1]];
   }
   if (!pair) return;
-  flip.hints--;
+  addHints(-1);
   updateFlipHintBtn();
   sndHint();
   pair.forEach((i) => flipGrid.children[i].classList.add('open', 'hint'));
@@ -387,7 +389,7 @@ function setDigitMsg(text, cls) {
 }
 
 $('digitStart').addEventListener('click', () => {
-  digit.hints = 3; /* 每局（一次完整挑战）共 3 次 */
+  ensureHints(); /* 每局（一次完整挑战）保底 3 次提示 */
   updateDigitHintBtn();
   startDigitRound();
 });
@@ -413,13 +415,14 @@ digitShowInput.addEventListener('change', () => {
 const digitHintBtn = $('digitHint');
 
 function updateDigitHintBtn() {
-  digitHintBtn.textContent = `提示（${digit.hints}）`;
-  digitHintBtn.disabled = !digit || digit.hints <= 0;
+  const h = getHints();
+  digitHintBtn.textContent = `提示（${h}）`;
+  digitHintBtn.disabled = !digit || h <= 0;
 }
 
 function useDigitHint() {
-  if (!digit || digit.phase !== 'input' || digit.hints <= 0) return;
-  digit.hints--;
+  if (!digit || digit.phase !== 'input' || getHints() <= 0) return;
+  addHints(-1);
   digit.hintUsed++;
   updateDigitHintBtn();
   sndHint();
@@ -435,6 +438,7 @@ let simon = null;
 function newSimon() {
   stopSimon();
   simon = { seq: [], idx: 0, phase: 'idle', timers: [], hints: 3 };
+  ensureHints();
   $('simonLevel').textContent = '0';
   $('simonMsg').textContent = '点击“开始挑战”，记住灯光亮起的顺序';
   $('simonMsg').className = 'game-msg';
@@ -459,7 +463,7 @@ function stopSimon() {
 function startSimon() {
   simon.seq = [];
   simon.timers = [];
-  simon.hints = 3; /* 每局 3 次 */
+  ensureHints(); /* 每局保底 3 次提示 */
   simonHintBtn.hidden = false;
   updateSimonHintBtn();
   simonNext();
@@ -533,13 +537,14 @@ document.querySelectorAll('.pad').forEach((p) => p.addEventListener('click', onP
 const simonHintBtn = $('simonHint');
 
 function updateSimonHintBtn() {
-  simonHintBtn.textContent = `提示（${simon ? simon.hints : 0}）`;
-  simonHintBtn.disabled = !simon || simon.hints <= 0;
+  const h = getHints();
+  simonHintBtn.textContent = `提示（${simon ? h : 0}）`;
+  simonHintBtn.disabled = !simon || h <= 0;
 }
 
 function useSimonHint() {
-  if (!simon || simon.phase !== 'input' || simon.hints <= 0) return;
-  simon.hints--;
+  if (!simon || simon.phase !== 'input' || getHints() <= 0) return;
+  addHints(-1);
   updateSimonHintBtn();
   sndHint();
   const gap = Math.max(240, 560 - simon.seq.length * 25);
@@ -948,6 +953,29 @@ function addCoins(n) {
   return c;
 }
 
+/* ===== 提示道具：全局库存，三个游戏通用；每局保底 3 个，可金币购买叠加 ===== */
+function getHints() {
+  return Math.max(0, Number(localStorage.getItem('mem_hints')) || 0);
+}
+
+function addHints(n) {
+  const v = Math.max(0, getHints() + n);
+  localStorage.setItem('mem_hints', String(v));
+  return v;
+}
+
+/* 新一局开始：库存不足 3 时补足（保底免费 3 个） */
+function ensureHints() {
+  if (getHints() < 3) localStorage.setItem('mem_hints', '3');
+  return getHints();
+}
+
+function renderHintBtns() {
+  if (typeof updateFlipHintBtn === 'function') updateFlipHintBtn();
+  if (typeof updateDigitHintBtn === 'function') updateDigitHintBtn();
+  if (typeof updateSimonHintBtn === 'function') updateSimonHintBtn();
+}
+
 function getOwnedBacks() {
   try {
     const arr = JSON.parse(localStorage.getItem('mem_owned_backs'));
@@ -985,6 +1013,20 @@ function renderShop() {
   const coins = getCoins();
   const owned = getOwnedBacks();
   const equipped = getCardback();
+
+  /* 提示包：库存 + 购买按钮状态 */
+  $('shopHints').textContent = getHints();
+  const buyBtn = $('buyHints');
+  if (coins >= 20) {
+    buyBtn.textContent = '🪙 20 购买';
+    buyBtn.disabled = false;
+    buyBtn.classList.remove('poor');
+  } else {
+    buyBtn.textContent = '🪙 20（不足）';
+    buyBtn.disabled = true;
+    buyBtn.classList.add('poor');
+  }
+
   grid.innerHTML = '';
   CARDBACKS.forEach((item) => {
     const isOwned = owned.includes(item.id);
@@ -1067,9 +1109,22 @@ $('coinsBtn').addEventListener('click', () => {
   renderShop();
 });
 $('shopBack').addEventListener('click', () => showView('home'));
+$('buyHints').addEventListener('click', () => {
+  if (getCoins() < 20) {
+    sndMiss();
+    return;
+  }
+  addCoins(-20);
+  addHints(3);
+  sndWin();
+  renderCoins(true);
+  renderShop();
+  renderHintBtns();
+});
 $('navLogo').addEventListener('click', () => showView('home'));
 
-/* 初始化：应用已装备的卡背 + 金币显示 */
+/* 初始化：保底 3 个提示 + 应用已装备的卡背 + 金币显示 */
+ensureHints();
 document.body.dataset.cardback = getCardback();
 renderCoins();
 renderBest();
