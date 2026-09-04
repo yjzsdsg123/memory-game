@@ -1974,7 +1974,7 @@ body[data-cardback='gold'] .face.back {
   position: relative;
   width: 100%;
   height: min(68vh, 620px);
-  min-height: 380px;
+  min-height: 420px;
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -1983,10 +1983,20 @@ body[data-cardback='gold'] .face.back {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  perspective: 1200px;
-  perspective-origin: 50% 22%;
+  cursor: crosshair;
+}
+/* 第一人称 3D Canvas 覆盖旧 CSS 场景 */
+#fpCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  display: block;
+  background: transparent;
 }
 .world-stage {
+  /* 旧 CSS 场景全部下沉并隐藏，Canvas 在上面 */
   position: absolute;
   left: 50%;
   top: 50%;
@@ -1994,6 +2004,76 @@ body[data-cardback='gold'] .face.back {
   height: 680px;
   transform-origin: center center;
   transform-style: preserve-3d;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.world-ground,
+.world-layer {
+  display: none; /* 旧 CSS 3D 世界不再渲染，逻辑仍兼容 */
+}
+.wcloud {
+  /* 云下沉、不遮挡 Canvas 准星交互 */
+  z-index: 0;
+}
+
+/* 第一人称 HUD */
+.fp-cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  z-index: 8;
+  pointer-events: none;
+}
+.fp-cross::before,
+.fp-cross::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  border-radius: 1px;
+}
+.fp-cross::before { width: 2px; height: 18px; margin: -9px 0 0 -1px; }
+.fp-cross::after  { width: 18px; height: 2px; margin: -1px 0 0 -9px; }
+
+.fp-lock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9;
+  background: rgba(20, 18, 40, 0.78);
+  color: #fff;
+  padding: 18px 28px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  text-align: center;
+  line-height: 1.6;
+  font-size: 14px;
+  backdrop-filter: blur(8px);
+}
+.fp-lock b { font-size: 18px; color: #c4b5fd; display: block; margin-bottom: 4px; }
+
+.fp-hint {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 44px);
+  transform: translateX(-50%);
+  z-index: 10;
+  background: rgba(139, 92, 246, 0.95);
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  pointer-events: none;
 }
 .world-ground {
   position: absolute;

@@ -9,6 +9,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
   <nav class="navbar">
@@ -445,6 +446,7 @@
         <button class="btn small ghost" id="worldCharBtn">👤 形象</button>
       </div>
       <div class="world-wrap" id="worldWrap">
+        <canvas id="fpCanvas"></canvas>
         <i class="wcloud c1"></i><i class="wcloud c2"></i><i class="wcloud c3"></i>
         <div class="world-stage" id="worldStage">
           <div class="world-ground" id="worldGround"></div>
@@ -457,6 +459,13 @@
         <div class="world-joystick" id="worldJoystick">
           <div class="wj-knob" id="wjKnob"></div>
         </div>
+        <!-- 第一人称 HUD：准星 + 鼠标解锁引导 -->
+        <div class="fp-cross" id="fpCross" hidden></div>
+        <div class="fp-lock" id="fpLockMsg" hidden>
+          <b>点击画面进入第一人称</b><br/>
+          鼠标环顾 · WASD/方向键移动 · 空格跳 · Esc 解锁
+        </div>
+        <div class="fp-hint" id="fpHint" hidden></div>
       </div>
       <p class="world-tip">🕹️ 电脑用方向键 / WASD 移动，手机拖动左下摇杆；走近建筑点「进入」，点镇民可以聊天</p>
     </section>

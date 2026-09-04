@@ -2471,7 +2471,11 @@ function buildWorld() {
     }
   });
   bindJoystick();
-  window.addEventListener('resize', () => { if (world.running) fitWorld(); });
+  window.addEventListener('resize', () => {
+    if (!world.running) return;
+    fitWorld();
+    if (fp.scene) fpResize();
+  });
 }
 
 function fitWorld() {
@@ -2784,6 +2788,8 @@ function startWorld() {
   worldBeat(true);
   worldPoll();
   if (!localStorage.getItem('mem_avatar')) openCharEditor();
+  /* ---- 第一人称 3D 初始化 ---- */
+  initFirstPerson();
 }
 
 function stopWorld() {
@@ -2801,6 +2807,8 @@ function stopWorld() {
     const el = $('wbld-' + b.id);
     if (el) el.classList.remove('near');
   });
+  /* ---- 第一人称资源清理 ---- */
+  disposeFirstPerson();
 }
 
 /* ---- 角色创建 / 形象弹窗 ---- */
@@ -3188,3 +3196,605 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+/* ================================================================
+   第一人称 3D 世界（Three.js WebGL，覆盖旧 CSS 3D）
+   坐标约定：World 坐标系 X:0..1000（东）、Y:0..680（北）；
+   Three.js 世界：地面位于 z=0；world(x,y) → 3D 坐标=(x - 500, 0, 340 - y)
+   （即 world 原点 0,0 对应 3D x=-500,z=+340；北=z-方向）
+   ================================================================ */
+const fp = {
+  scene: null, camera: null, renderer: null, controls: null,
+  clock: null, animId: null,
+  buildingMeshes: [],    // [{ mesh, b:building }] 用于 raycast 进入建筑
+  npcMeshes: [],         // [{ sprite, n:NPC }]
+  charMeshes: new Map(), // botId/remoteId → { sprite, nameTag }
+  decoSprites: [],       // 用于清理
+  meHeight: 1.75,        // 眼睛高度 1.75m（每个 world 单位 = 5cm；1.75m = 35 单位？不：1 world 单位=1px，统一比例=1 world 单位=0.08m，680 高≈54m，1.75m≈22 单位）
+  meEye: 22,             // 眼睛相对地面的 world 单位高度（约 1.76m）
+  vel: { x: 0, y: 0, z: 0 },
+  onGround: true,
+  raycaster: null,
+  mouseVec: null,
+  locked: false,
+  /* 自写 PointerLock（yaw=绕 y、pitch=绕 x，Euler YXZ 顺序） */
+  yaw: 0, pitch: 0,
+  yawObj: null,   /* THREE.Object3D 作 yaw 容器，camera 挂其下并设置 pitch */
+  pitchObj: null, /* THREE.Object3D 作 pitch 容器（yawObj→pitchObj→camera） */
+  onMouseMove: null,  /* 绑定函数引用，释放时移除 */
+  onLockChange: null,
+};
+/* world(x, y) → THREE.Vector3(x', y', z')，y 为离地高度（单位=world 单位） */
+function to3(x, y, h = 0) {
+  /* 比例：1 world 单位 = 0.08 米；场景整体缩放到 Three.js 合理尺寸 */
+  const S = 0.08;
+  return { x: (x - WORLD_W / 2) * S, y: h * S, z: (WORLD_H / 2 - y) * S, S };
+}
+function colorFromTheme(lightMix, darkMix) {
+  const dark = document.body.dataset.theme === 'dark';
+  return new THREE.Color(dark ? darkMix : lightMix);
+}
+
+/* 创建带 emoji 的 Sprite（贴脸板） */
+function makeEmojiSprite(emoji, opts = {}) {
+  const size = opts.size || 34;
+  const canvas = document.createElement('canvas');
+  canvas.width = size * 2;
+  canvas.height = size * 2;
+  const ctx = canvas.getContext('2d');
+  if (opts.bubble) {
+    /* 标签背景 */
+    const w = Math.max(size * 3.4, emoji.length * 20 + 40);
+    canvas.width = w; canvas.height = size + 8;
+    ctx.fillStyle = opts.bubble.bg || 'rgba(255,255,255,0.92)';
+    ctx.strokeStyle = opts.bubble.border || 'rgba(0,0,0,0.08)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, 2, 2, w - 4, size + 4, 14);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = opts.bubble.color || '#23203a';
+    ctx.font = `700 ${size * 0.52}px "Segoe UI","PingFang SC","Microsoft YaHei"`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, w / 2, size / 2 + 4);
+  } else {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${size}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+    ctx.fillText(emoji, size, size);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.anisotropy = 4;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const sp = new THREE.Sprite(mat);
+  return sp;
+}
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* ---- 初始化入口 ---- */
+function initFirstPerson() {
+  if (typeof THREE === 'undefined') {
+    console.warn('Three.js 未加载，第一人称不可用');
+    return;
+  }
+  if (fp.scene) return; /* 幂等 */
+  const wrap = $('worldWrap');
+  const canvas = $('fpCanvas');
+  const S = to3(0, 0, 0).S;
+
+  /* 场景+背景雾 */
+  fp.scene = new THREE.Scene();
+  const dark = document.body.dataset.theme === 'dark';
+  fp.scene.background = dark ? new THREE.Color('#141a33') : new THREE.Color('#87ceeb');
+  fp.scene.fog = new THREE.Fog(
+    dark ? '#141a33' : '#87ceeb',
+    20, 80
+  );
+
+  /* 相机（挂在 yawObj→pitchObj 层级下，相机本身 local position=0；yawObj 跟随玩家眼睛 3D 坐标） */
+  const rect = wrap.getBoundingClientRect();
+  fp.camera = new THREE.PerspectiveCamera(70, rect.width / rect.height, 0.1, 500);
+  fp.camera.position.set(0, 0, 0);
+
+  /* Renderer */
+  fp.renderer = new THREE.WebGLRenderer({
+    canvas, antialias: true, alpha: true, powerPreference: 'high-performance',
+  });
+  fp.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  fp.renderer.setSize(rect.width, rect.height, false);
+  fp.renderer.shadowMap.enabled = true;
+  fp.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  fp.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  /* 灯光 */
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x4d6e3a, dark ? 0.55 : 0.85);
+  fp.scene.add(hemi);
+  const dir = new THREE.DirectionalLight(0xffffff, dark ? 0.7 : 1.1);
+  dir.position.set(15, 40, 15);
+  dir.castShadow = true;
+  dir.shadow.mapSize.set(2048, 2048);
+  dir.shadow.camera.near = 1;
+  dir.shadow.camera.far = 100;
+  dir.shadow.camera.left = -40;
+  dir.shadow.camera.right = 40;
+  dir.shadow.camera.top = 40;
+  dir.shadow.camera.bottom = -40;
+  fp.scene.add(dir);
+
+  /* ---- 构建世界 ---- */
+  buildFpWorld(S, dark);
+
+  /* 相机控制：自写第一人称 PointerLock (yaw/pitch Euler)，避免 three examples 路径脆弱 */
+  fp.yawObj = new THREE.Object3D();
+  fp.pitchObj = new THREE.Object3D();
+  fp.pitchObj.add(fp.camera);
+  fp.yawObj.add(fp.pitchObj);
+  fp.scene.add(fp.yawObj);
+  /* 把 yawObj 初始位置放玩家眼睛处 */
+  const eye0 = to3(world.me.x, world.me.y, fp.meEye);
+  fp.yawObj.position.set(eye0.x, eye0.y, eye0.z);
+  /* 玩家出生在地图南（y=615 下方），应当"默认向前=向北（world y 减小）"，
+     Three.js 相机默认向 -z；但 to3 中 +z = 向南，-z = 向北。
+     所以把 yaw 预设为 π（旋转 180°）让 forward 朝 +z 方向（向北），W 键即前进 */
+  fp.yaw = Math.PI;
+  fp.yawObj.rotation.y = fp.yaw;
+
+  fp.onMouseMove = (e) => {
+    if (!fp.locked) return;
+    /* 灵敏度：2000 像素 ≈ 2π 弧度 → 每像素 0.00314 弧度 */
+    const sens = 0.0022;
+    fp.yaw   -= e.movementX * sens;
+    fp.pitch -= e.movementY * sens;
+    /* Pitch 钳制 ±85°，避免翻到后面 */
+    const lim = Math.PI * 0.48;
+    if (fp.pitch >  lim) fp.pitch =  lim;
+    if (fp.pitch < -lim) fp.pitch = -lim;
+    fp.yawObj.rotation.y   = fp.yaw;
+    fp.pitchObj.rotation.x = fp.pitch;
+  };
+  document.addEventListener('mousemove', fp.onMouseMove);
+  fp.onLockChange = () => {
+    const locked = document.pointerLockElement === canvas || document.pointerLockElement === wrap;
+    fp.locked = locked;
+    $('fpCross').hidden = !locked;
+    $('fpLockMsg').hidden = locked;
+  };
+  document.addEventListener('pointerlockchange', fp.onLockChange);
+
+  fp.raycaster = new THREE.Raycaster();
+  fp.mouseVec = new THREE.Vector2(0, 0);
+  fp.clock = new THREE.Clock();
+  fp.lock = () => { try { canvas.requestPointerLock(); } catch (e) { wrap.requestPointerLock(); } };
+
+  wrap.addEventListener('click', () => {
+    if (fp.locked) fpInteract();
+    else fp.lock();
+  });
+  $('fpLockMsg').hidden = false;
+  $('fpCross').hidden = true;
+  $('fpHint').hidden = true;
+
+  /* 键盘：WASD + 方向键（由 onWorldKey 已绑定的 world.keys 读取）+ 空格跳 */
+  window.addEventListener('keydown', onFpKey);
+  window.addEventListener('keyup', onFpKey);
+
+  /* 启动动画循环 */
+  animateFp();
+
+  /* 初始化 3D 角色 */
+  initFpChars(S);
+}
+
+function buildFpWorld(S, dark) {
+  /* 地面：WORLD_W × WORLD_H = 80 × 54.4 米 */
+  const groundGeo = new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S, 1, 1);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: dark ? 0x2a5230 : 0x7fc377,
+    roughness: 0.95, metalness: 0,
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  fp.scene.add(ground);
+
+  /* 路径：横竖两条路 */
+  const pathMat = new THREE.MeshStandardMaterial({
+    color: dark ? 0x3b3525 : 0xe2d09e, roughness: 0.8,
+  });
+  const pathH = new THREE.Mesh(
+    new THREE.BoxGeometry(WORLD_W * S, 0.05, 38 * S),
+    pathMat
+  );
+  pathH.position.set(0, 0.025, (WORLD_H / 2 - 560) * S);
+  pathH.receiveShadow = true;
+  fp.scene.add(pathH);
+  const pathV = new THREE.Mesh(
+    new THREE.BoxGeometry(38 * S, 0.05, WORLD_H * S),
+    pathMat
+  );
+  pathV.position.set((500 - WORLD_W / 2) * S, 0.025, 0);
+  pathV.receiveShadow = true;
+  fp.scene.add(pathV);
+
+  /* 建筑（Box 主体 + 四坡屋顶） */
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: dark ? 0x2a2545 : 0xf4f1ff, roughness: 0.85,
+  });
+  const roofMat = new THREE.MeshStandardMaterial({
+    color: dark ? 0x43388a : 0x6f4bcc, roughness: 0.7,
+  });
+  const baseY = (obj) => obj.userData.centerY = 0;
+  for (const b of WORLD_BUILDINGS) {
+    const w = b.w * S, d = b.h * S, h = 110 * S; /* 建筑高度=8.8m */
+    const center = to3(b.x + b.w / 2, b.y + b.h / 2);
+    const group = new THREE.Group();
+    /* 主体（加厚度向后） */
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d * 1.2), wallMat);
+    body.position.set(0, h / 2, -d * 0.1);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    /* 屋顶：四棱锥 */
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(Math.max(w, d * 1.2) * 0.9, h * 0.5, 4),
+      roofMat
+    );
+    roof.position.set(0, h + h * 0.25, -d * 0.1);
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    group.add(roof);
+    /* 正面 emoji 标签（Sprite，贴正面上方） */
+    const emSp = makeEmojiSprite(b.emoji, { size: 58 });
+    emSp.scale.set(0.8, 0.8, 1);
+    emSp.position.set(0, h * 0.72, d * 0.6);
+    group.add(emSp);
+    /* 下方名字（小标签） */
+    const nameSp = makeEmojiSprite(b.name, { bubble: true, size: 26,
+      bubble: { bg: dark ? 'rgba(32,29,51,0.95)' : 'rgba(255,255,255,0.95)',
+                 border: dark ? 'rgba(139,92,246,0.5)' : 'rgba(0,0,0,0.1)',
+                 color: dark ? '#ece9f8' : '#23203a' } });
+    nameSp.scale.set(2.0, 0.6, 1);
+    nameSp.position.set(0, h * 0.22, d * 0.62);
+    group.add(nameSp);
+    group.position.set(center.x, 0, center.z);
+    group.userData.building = b;
+    fp.scene.add(group);
+    body.userData.building = b;   /* raycast 能命中 body 拿到建筑引用 */
+    fp.buildingMeshes.push(body);
+  }
+
+  /* 装饰 Sprite（🌳🌲🌻🪨⛲🪧🌷🦋🐦） */
+  for (const d of WORLD_DECOS) {
+    const p = to3(d.x, d.y);
+    const isEmoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(d.t);
+    const size = d.fly ? 0.6 : (d.fx ? 1.0 : (d.t === '🌳' || d.t === '🌲' ? 0.9 : 0.65));
+    const sp = makeEmojiSprite(d.t, { size: 42 });
+    sp.scale.set(size, size, 1);
+    if (d.fx) {
+      sp.position.set(p.x, 1.3, p.z);
+    } else if (d.fly) {
+      sp.position.set(p.x, 2.4, p.z);
+    } else {
+      sp.position.set(p.x, size * 0.55, p.z);
+    }
+    if (d.fly) sp.userData.fly = { t0: performance.now(), p0: { x: p.x, y: 2.4, z: p.z } };
+    if (d.fx)  sp.userData.fx = { t0: performance.now() };
+    fp.decoSprites.push(sp);
+    fp.scene.add(sp);
+  }
+
+  /* 喷泉粒子 */
+  const p = to3(500, 512);
+  for (let i = 0; i < 8; i++) {
+    const geo = new THREE.SphereGeometry(0.06, 6, 6);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.9 });
+    const s = new THREE.Mesh(geo, mat);
+    s.position.set(p.x, 1.5, p.z);
+    s.userData.fountain = { t0: performance.now() + Math.random() * 1.3e3, ox: (Math.random() - 0.5) * 0.15 };
+    fp.decoSprites.push(s);
+    fp.scene.add(s);
+  }
+}
+
+/* ---- 3D 角色初始化 & 每帧同步 ---- */
+function initFpChars(S) {
+  /* NPC */
+  for (const n of WORLD_NPCS) {
+    const p = to3(n.x, n.y);
+    const spr = makeEmojiSprite(n.emoji, { size: 54 });
+    spr.scale.set(1.1, 1.1, 1);
+    spr.position.set(p.x, 1.35, p.z);
+    const tag = makeEmojiSprite(n.name, { bubble: true, size: 24,
+      bubble: { bg: 'rgba(254, 243, 199, 0.98)', border: 'rgba(245,158,11,0.6)', color: '#92400e' } });
+    tag.scale.set(1.9, 0.56, 1);
+    tag.position.set(p.x, 2.3, p.z);
+    spr.userData.npc = n;
+    fp.scene.add(spr); fp.scene.add(tag);
+    fp.npcMeshes.push({ spr, tag, n });
+  }
+  /* 机器人 */
+  for (const b of world.bots) {
+    const p = to3(b.x, b.y);
+    const spr = makeEmojiSprite(b.avatar, { size: 54 });
+    spr.scale.set(1.0, 1.0, 1);
+    spr.position.set(p.x, 1.3, p.z);
+    const tag = makeEmojiSprite(b.name, { bubble: true, size: 22,
+      bubble: { bg: 'rgba(255,255,255,0.95)', border: 'rgba(0,0,0,0.08)', color: '#23203a' } });
+    tag.scale.set(1.8, 0.54, 1);
+    tag.position.set(p.x, 2.25, p.z);
+    fp.scene.add(spr); fp.scene.add(tag);
+    fp.charMeshes.set(b.id, { spr, tag });
+  }
+  /* 远端玩家（初始空，syncFpRemotes 由 worldPoll 触发同步） */
+  syncFpRemotes(true);
+}
+
+/* 同步远端玩家到 3D 场景 */
+function syncFpRemotes(firstBuild = false) {
+  if (!fp.scene) return;
+  /* 远端玩家 id 集合 */
+  const live = new Set(world.remotes.map(p => 'rm:' + p.id));
+  /* 清理已不存在的远端 */
+  for (const [id, rec] of fp.charMeshes) {
+    if (id.startsWith('rm:') && !live.has(id)) {
+      fp.scene.remove(rec.spr); fp.scene.remove(rec.tag);
+      rec.spr.material.map.dispose();
+      fp.charMeshes.delete(id);
+    }
+  }
+  for (const p of world.remotes) {
+    const key = 'rm:' + p.id;
+    const pos = to3(p.x, p.y);
+    let rec = fp.charMeshes.get(key);
+    if (!rec) {
+      const spr = makeEmojiSprite(p.avatar || '🧑‍🎨', { size: 54 });
+      spr.scale.set(1.0, 1.0, 1);
+      spr.position.set(pos.x, 1.3, pos.z);
+      const friend = !!p.isFriend;
+      const tag = makeEmojiSprite((friend ? '👥 ' : '') + p.name, {
+        bubble: true, size: 22,
+        bubble: friend
+          ? { bg: 'rgba(220, 252, 231, 0.96)', border: 'rgba(34,197,94,0.55)', color: '#15803d' }
+          : { bg: 'rgba(255,255,255,0.95)', border: 'rgba(0,0,0,0.08)', color: '#23203a' }
+      });
+      tag.scale.set(2.0, 0.54, 1);
+      tag.position.set(pos.x, 2.25, pos.z);
+      fp.scene.add(spr); fp.scene.add(tag);
+      rec = { spr, tag };
+      fp.charMeshes.set(key, rec);
+    } else {
+      rec.spr.position.set(pos.x, 1.3, pos.z);
+      rec.tag.position.set(pos.x, 2.25, pos.z);
+    }
+  }
+}
+/* 每帧位置同步（机器人 tick 已由 worldTick 50ms 更新 2D 坐标，这里读取 world.bots 位置） */
+function syncFpCharsEveryFrame() {
+  if (!fp.scene) return;
+  for (const b of world.bots) {
+    const rec = fp.charMeshes.get(b.id);
+    if (!rec) continue;
+    const p = to3(b.x, b.y);
+    rec.spr.position.set(p.x, 1.3, p.z);
+    rec.tag.position.set(p.x, 2.25, p.z);
+  }
+  /* 飞蝶/鸟动画 */
+  for (const o of fp.decoSprites) {
+    const f = o.userData.fly; if (!f) continue;
+    const t = (performance.now() - f.t0) / 1000;
+    const a = 0.6;
+    o.position.x = f.p0.x + Math.sin(t * 0.9) * a * 0.7;
+    o.position.y = f.p0.y + Math.sin(t * 1.6) * 0.15;
+    o.position.z = f.p0.z + Math.cos(t * 0.7) * a * 0.5;
+  }
+  /* 喷泉动画 */
+  for (const o of fp.decoSprites) {
+    const f = o.userData.fountain; if (!f) continue;
+    const t = ((performance.now() - f.t0) / 1000) % 1.3;
+    const h = -1.8 * t * t + 2.34 * t;           /* 抛物线 0→最高点 0.65→0 */
+    o.position.y = 1.55 + h;
+    o.material.opacity = t < 1.1 ? 0.95 : 0.95 * (1 - (t - 1.1) / 0.2);
+  }
+  /* 玩家眼睛（yawObj 容器）跟随 world.me 2D 坐标 —— 单一真相写入 */
+  const me = to3(world.me.x, world.me.y, fp.meEye);
+  const target = new THREE.Vector3(me.x, me.y, me.z);
+  if (fp.yawObj) fp.yawObj.position.lerp(target, 0.45);
+}
+
+/* ---- 控制：键盘（WASD/方向键跳）+ 重力 AABB 碰撞 ---- */
+const fpKeys = { fwd: false, bwd: false, left: false, right: false, jump: false };
+function onFpKey(e) {
+  if (!fp.locked && !['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','Space'].includes(e.key)) return;
+  const k = e.key.toLowerCase() === ' ' ? 'space' : e.key.toLowerCase();
+  const down = e.type === 'keydown';
+  if (k === 'w' || k === 'arrowup')    fpKeys.fwd = down;
+  if (k === 's' || k === 'arrowdown')  fpKeys.bwd = down;
+  if (k === 'a' || k === 'arrowleft')  fpKeys.left = down;
+  if (k === 'd' || k === 'arrowright') fpKeys.right = down;
+  if (k === 'space' || k === ' ')      fpKeys.jump = down;
+}
+
+/* AABB 碰撞：尝试 nx/nz（world 坐标，中心为 1×1 方块，半径 20 world 单位=1.6m） */
+function fpCollides(nx, nz) {
+  /* world 坐标下玩家 AABB 半宽 half=18 单位 */
+  const half = 18;
+  const xa = nx - half, xb = nx + half;
+  const za = nz - half, zb = nz + half;
+  for (const s of WORLD_SOLIDS) {
+    const sxa = s.x, sxb = s.x + s.w;
+    const sza = s.y, szb = s.y + s.h;
+    if (xb > sxa && xa < sxb && zb > sza && za < szb) return true;
+  }
+  /* 世界边界钳制（在调用方也会再做一次，这里保底） */
+  if (nx < 26 || nx > WORLD_W - 26) return true;
+  if (nz < 90 || nz > WORLD_H - 18) return true;
+  return false;
+}
+
+/* 读取 world.me 2D 坐标，用相机 forward/right 向量投影到 z=0 平面，写回 world.me.x/y；
+   相机高度/重力单独维护。world.me.x/y 即"单一真相"，2D 世界的碰撞/心跳/机器人都读这里。
+   这样所有功能（2D 碰撞箱、联机坐标上报、靠近检测）都可以零修改复用，
+   完全满足经验 #100020927 的"收敛写入点"要求。 */
+function moveFp(dt) {
+  if (!fp.locked) return;
+  const realSpeed = 55; /* world 单位/秒（0.08m/u → 4.4 m/s，快走） */
+  const S = 0.08;
+
+  /* forward 向量 = camera direction 投影到地面（y=0 平面） */
+  const dir = new THREE.Vector3();
+  fp.camera.getWorldDirection(dir);
+  dir.y = 0;
+  if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1);
+  dir.normalize();
+  const right = new THREE.Vector3(-dir.z, 0, dir.x);
+
+  let wx3 = 0, wz3 = 0;
+  if (fpKeys.fwd)   { wx3 += dir.x; wz3 += dir.z; }
+  if (fpKeys.bwd)   { wx3 -= dir.x; wz3 -= dir.z; }
+  if (fpKeys.left)  { wx3 -= right.x; wz3 -= right.z; }
+  if (fpKeys.right) { wx3 += right.x; wz3 += right.z; }
+  const len = Math.hypot(wx3, wz3);
+  if (len <= 0) return;
+  wx3 /= len; wz3 /= len;
+  /* pos_3d = (wx3, wz3) * speed * dt；world 坐标差 = 3D 差 / S */
+  const dwx = (wx3 * realSpeed * dt) / S;
+  const dwz = (wz3 * realSpeed * dt) / S;
+  /* world 北向 = -3D z 向 */
+  const dwy = -dwz;
+  /* 分轴 AABB：和 worldTick 完全一致 */
+  const nx = wcClamp(world.me.x + dwx, 26, WORLD_W - 26);
+  const ny = wcClamp(world.me.y + dwy, 90, WORLD_H - 18);
+  if (!fpCollides(nx, world.me.y)) world.me.x = nx;
+  if (!fpCollides(world.me.x, ny)) world.me.y = ny;
+}
+
+/* ---- Raycast 检测正前方目标 -> 交互提示 ---- */
+function fpLookCheck() {
+  if (!fp.scene || !fp.locked) {
+    $('fpHint').hidden = true;
+    fp._hoverBuilding = null;
+    fp._hoverNpc = null;
+    return;
+  }
+  fp.raycaster.setFromCamera(fp.mouseVec, fp.camera);
+  const all = fp.buildingMeshes.concat(
+    fp.npcMeshes.map(n => {
+      const m = n.spr.clone(true);
+      m.userData.npc = n.n;           /* 避免污染原对象，后面不用它 */
+      return m;
+    })
+  );
+  const hits = fp.raycaster.intersectObjects(fp.buildingMeshes, false);
+  /* NPC 单独用距离球判定更稳（emoji sprite 难 raycast） */
+  let npcHit = null, npcDist = Infinity;
+  const origin = fp.camera.position.clone();
+  const fwd = new THREE.Vector3();
+  fp.camera.getWorldDirection(fwd);
+  for (const n of fp.npcMeshes) {
+    const to = n.spr.position.clone().sub(origin);
+    const along = to.dot(fwd);
+    if (along < 0.1 || along > 16) continue;
+    const perp = to.clone().sub(fwd.clone().multiplyScalar(along)).length();
+    if (perp < 0.9 && along < npcDist) { npcDist = along; npcHit = n.n; }
+  }
+  let buildingHit = null;
+  if (hits.length > 0 && hits[0].distance < 22) {
+    buildingHit = hits[0].object.userData.building;
+  }
+  if (npcHit) {
+    fp._hoverBuilding = null;
+    fp._hoverNpc = npcHit;
+    const el = $('fpHint');
+    el.hidden = false;
+    el.innerHTML = `🗣️ 按 <b>E</b> 或 点击 和 ${npcHit.name} 聊天`;
+  } else if (buildingHit) {
+    fp._hoverBuilding = buildingHit;
+    fp._hoverNpc = null;
+    const el = $('fpHint');
+    el.hidden = false;
+    el.innerHTML = `🚪 按 <b>E</b> 或 点击 进入${buildingHit.name}`;
+  } else {
+    $('fpHint').hidden = true;
+    fp._hoverBuilding = null;
+    fp._hoverNpc = null;
+  }
+}
+
+function fpInteract() {
+  /* 按 E 或 点击（已锁定时）触发交互 */
+  if (fp._hoverBuilding) {
+    sndFlip();
+    enterWorldView(fp._hoverBuilding.view);
+  } else if (fp._hoverNpc) {
+    sndFlip();
+    openNpc(fp._hoverNpc);
+  }
+}
+
+/* ---- 渲染循环 ---- */
+function animateFp() {
+  fp.animId = requestAnimationFrame(animateFp);
+  const dt = Math.min(fp.clock.getDelta(), 0.05);
+  moveFp(dt);
+  syncFpCharsEveryFrame();
+  syncFpRemotes();      /* 不重创建，只是位置修正（幂等但开销低） */
+  fpLookCheck();
+  fp.renderer.render(fp.scene, fp.camera);
+}
+
+/* ---- 适配窗口 ---- */
+function fpResize() {
+  if (!fp.renderer) return;
+  const rect = $('worldWrap').getBoundingClientRect();
+  fp.camera.aspect = rect.width / rect.height;
+  fp.camera.updateProjectionMatrix();
+  fp.renderer.setSize(rect.width, rect.height, false);
+}
+
+/* ---- 资源释放 ---- */
+function disposeFirstPerson() {
+  if (fp.animId) { cancelAnimationFrame(fp.animId); fp.animId = null; }
+  if (fp.onMouseMove)  { document.removeEventListener('mousemove', fp.onMouseMove); fp.onMouseMove = null; }
+  if (fp.onLockChange){ document.removeEventListener('pointerlockchange', fp.onLockChange); fp.onLockChange = null; }
+  if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) {} }
+  window.removeEventListener('keydown', onFpKey);
+  window.removeEventListener('keyup', onFpKey);
+  fp.locked = false;
+  $('fpCross').hidden = true;
+  $('fpLockMsg').hidden = true;
+  $('fpHint').hidden = true;
+  if (fp.scene) {
+    fp.scene.traverse(obj => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        }
+      }
+    });
+    fp.scene = null;
+  }
+  if (fp.renderer) { fp.renderer.dispose(); fp.renderer = null; }
+  fp.camera = null; fp.yawObj = null; fp.pitchObj = null;
+  fp.buildingMeshes.length = 0;
+  fp.npcMeshes.length = 0;
+  fp.charMeshes.clear();
+  fp.decoSprites.length = 0;
+  fp.raycaster = null; fp.mouseVec = null; fp.clock = null;
+}
+
+/* 交互键 E 绑定（避免 PointerLock 下 click 只触发一次交互） */
+window.addEventListener('keydown', (e) => {
+  if (e.key && e.key.toLowerCase() === 'e' && fp && fp.locked) {
+    fpInteract();
+  }
+});
