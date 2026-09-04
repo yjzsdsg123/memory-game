@@ -168,6 +168,14 @@
         <div class="side ai"><b id="rankAi">0</b><span>AI</span></div>
       </div>
       <div class="turn-indicator" id="rankTurn">你的回合</div>
+      <div class="rank-items">
+        <button class="item-btn" id="useFreeze" title="冰冻对手：跳过 AI 下一回合">
+          <span class="item-emoji">❄️</span><span class="item-name">冻结</span><b class="item-count" id="cntFreeze">0</b>
+        </button>
+        <button class="item-btn" id="usePeek" title="透视：随机公开一张牌 1.5 秒">
+          <span class="item-emoji">👁️</span><span class="item-name">透视</span><b class="item-count" id="cntPeek">0</b>
+        </button>
+      </div>
       <div class="flip-grid" id="rankGrid"></div>
       <div class="game-msg" id="rankMsg"></div>
     </section>
@@ -201,6 +209,24 @@
           <div class="shop-consumable-row">
             <span class="hint-stock">今日剩余 <b id="shopAdLeft">3</b></span>
             <button class="shop-buy ad-buy" id="watchAd">📺 观看广告</button>
+          </div>
+        </div>
+        <div class="shop-item shop-consumable">
+          <div class="shop-preview freeze-preview">❄️</div>
+          <b>冻结卡</b>
+          <span class="shop-desc">排位赛专用：冰冻对手，跳过 AI 下一回合</span>
+          <div class="shop-consumable-row">
+            <span class="hint-stock">持有 <b id="shopFreeze">0</b></span>
+            <button class="shop-buy" id="buyFreeze">🪙 40 购买</button>
+          </div>
+        </div>
+        <div class="shop-item shop-consumable">
+          <div class="shop-preview peek-preview">👁️</div>
+          <b>透视卡</b>
+          <span class="shop-desc">排位赛专用：随机公开一张牌 1.5 秒，帮你记忆</span>
+          <div class="shop-consumable-row">
+            <span class="hint-stock">持有 <b id="shopPeek">0</b></span>
+            <button class="shop-buy" id="buyPeek">🪙 30 购买</button>
           </div>
         </div>
       </div>

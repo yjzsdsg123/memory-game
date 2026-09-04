@@ -662,6 +662,14 @@ function renderRankHud() {
   document.querySelector('.rank-score .side.you').classList.toggle('active', !rank.over && rank.turn === 'you');
   document.querySelector('.rank-score .side.ai').classList.toggle('active', !rank.over && rank.turn === 'ai');
 
+  /* 道具按钮：仅你的回合且不忙碌时可用 */
+  const items = getItems();
+  $('cntFreeze').textContent = items.freeze;
+  $('cntPeek').textContent = items.peek;
+  const canAct = !rank.over && !rank.busy && rank.turn === 'you';
+  $('useFreeze').disabled = !canAct || items.freeze <= 0;
+  $('usePeek').disabled = !canAct || items.peek <= 0 || rank.frozen;
+
   /* 段位进度条 */
   const tierIdx = RANK_TIERS.indexOf(tier);
   const next = RANK_TIERS[tierIdx + 1];
@@ -760,7 +768,61 @@ function onRankCard(i) {
 
 function scheduleAiMove() {
   if (!rank || rank.over) return;
+  /* 冻结卡生效：AI 下一回合被冰冻跳过 */
+  if (rank.frozen) {
+    rank.frozen = false;
+    rank.busy = true;
+    const aiSide = document.querySelector('.rank-score .side.ai');
+    aiSide.classList.add('frozen');
+    setRankMsg('❄️ 对手被冰冻，跳过回合！');
+    sndMiss();
+    rank.timers.push(setTimeout(() => {
+      if (!rank) return;
+      aiSide.classList.remove('frozen');
+      rank.busy = false;
+      rank.turn = 'you';
+      renderRankHud();
+      setRankMsg('❄️ AI 被冰冻，轮到你连翻！');
+    }, 1100));
+    return;
+  }
   rank.timers.push(setTimeout(aiMove, 900));
+}
+
+/* ===== 排位赛道具：冻结卡 / 透视卡 ===== */
+function useFreeze() {
+  if (!rank || rank.over || rank.busy || rank.turn !== 'you') return;
+  const items = getItems();
+  if (items.freeze <= 0 || rank.frozen) return;
+  addItem('freeze', -1);
+  rank.frozen = true;
+  sndMatch();
+  renderRankHud();
+  setRankMsg('❄️ 已使用冻结卡！对手下回合将被冰冻跳过');
+}
+
+function usePeek() {
+  if (!rank || rank.over || rank.busy || rank.turn !== 'you') return;
+  const items = getItems();
+  if (items.peek <= 0) return;
+  /* 随机选一张未配对、未翻开的牌 */
+  const cand = rank.deck.map((c, i) => i).filter((i) => !rank.deck[i].done && !rank.deck[i].open);
+  if (!cand.length) return;
+  const idx = cand[Math.floor(Math.random() * cand.length)];
+  addItem('peek', -1);
+  rank.busy = true;
+  const el = $('rankGrid').children[idx];
+  el.classList.add('open', 'peek');
+  sndFlip();
+  renderRankHud();
+  setRankMsg(`👁️ 透视卡发动！第 ${idx + 1} 号牌是「${rank.deck[idx].e}」`);
+  rank.timers.push(setTimeout(() => {
+    if (!rank) return;
+    el.classList.remove('open', 'peek');
+    rank.busy = false;
+    renderRankHud();
+    setRankMsg('轮到你了：记住位置，继续翻牌！');
+  }, 1500));
 }
 
 function aiMove() {
@@ -925,6 +987,8 @@ function showRankResult({ result, you, ai, delta, bonus, coins, promoted, demote
 
 $('rankRestart').addEventListener('click', newRank);
 $('rankBack').addEventListener('click', () => showView('home'));
+$('useFreeze').addEventListener('click', useFreeze);
+$('usePeek').addEventListener('click', usePeek);
 $('rrAgain').addEventListener('click', newRank);
 $('rrHome').addEventListener('click', () => {
   $('rankResult').hidden = true;
@@ -968,6 +1032,36 @@ function addHints(n) {
 function ensureHints() {
   if (getHints() < 3) localStorage.setItem('mem_hints', '3');
   return getHints();
+}
+
+/* ===== 排位赛道具：冻结卡 / 透视卡（金币购买） ===== */
+function getItems() {
+  try {
+    const o = JSON.parse(localStorage.getItem('mem_items'));
+    return { freeze: Number(o.freeze) || 0, peek: Number(o.peek) || 0 };
+  } catch {
+    return { freeze: 0, peek: 0 };
+  }
+}
+
+function addItem(key, n) {
+  const items = getItems();
+  items[key] = Math.max(0, items[key] + n);
+  localStorage.setItem('mem_items', JSON.stringify(items));
+  return items[key];
+}
+
+/* 购买一个排位赛道具（price 金币） */
+function buyItem(key, price) {
+  if (getCoins() < price) {
+    sndMiss();
+    return;
+  }
+  addCoins(-price);
+  addItem(key, 1);
+  sndWin();
+  renderCoins(true);
+  renderShop();
 }
 
 function renderHintBtns() {
@@ -1038,6 +1132,25 @@ function renderShop() {
     adBtn.textContent = '📺 观看广告';
     adBtn.disabled = false;
   }
+
+  /* 排位赛道具：冻结卡 40 / 透视卡 30 */
+  const items = getItems();
+  $('shopFreeze').textContent = items.freeze;
+  $('shopPeek').textContent = items.peek;
+  const setUpBuy = (id, price, stock) => {
+    const b = $(id);
+    if (coins >= price) {
+      b.textContent = `🪙 ${price} 购买`;
+      b.disabled = false;
+      b.classList.remove('poor');
+    } else {
+      b.textContent = `🪙 ${price}（不足）`;
+      b.disabled = true;
+      b.classList.add('poor');
+    }
+  };
+  setUpBuy('buyFreeze', 40);
+  setUpBuy('buyPeek', 30);
 
   grid.innerHTML = '';
   CARDBACKS.forEach((item) => {
@@ -1135,6 +1248,8 @@ $('buyHints').addEventListener('click', () => {
   renderShop();
   renderHintBtns();
 });
+$('buyFreeze').addEventListener('click', () => buyItem('freeze', 40));
+$('buyPeek').addEventListener('click', () => buyItem('peek', 30));
 $('navLogo').addEventListener('click', () => showView('home'));
 
 /* ================= 现金充值（演示支付流程） ================= */
